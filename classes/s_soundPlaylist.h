@@ -11,7 +11,7 @@ class s_soundPlaylist
     public:
         /*** Member variables ***/
 		std::string name; //The identifying name of the playlist
-        std::vector< tuple<std::string,std::string> > sounds; //The keys of the sounds (tuple<categoryName,soundName>) and their order in the playlist.
+        std::vector< std::tuple<std::string,std::string> > sounds; //The keys of the sounds (tuple<categoryName,soundName>) and their order in the playlist.
         int index; //Index of the currently playing song;
         std::string controllerId; //The sound controller which this playlist is assigned to.
 		std::string status; //The current status of the playlist. Possible values are: "stopped", "paused", and "playing"
@@ -54,7 +54,7 @@ class s_soundPlaylist
          *  A newly created playlist object
          */
         s_soundPlaylist(    const std::string & nameParam,
-							unordered_map<std::string, unordered_map<std::string, s_soundData> > & sourceSounds,
+							std::unordered_map<std::string, std::unordered_map<std::string, s_soundData> > & sourceSounds,
                             std::vector<std::string> soundCategories,
                             std::vector<std::string> trackOrder,
                             std::string controllerIdParam,
@@ -68,7 +68,7 @@ class s_soundPlaylist
 
             //Creates a new unordered map for our sounds we'd like to use  so we can erase pairs
 			//for the purpose of tracking which sounds have already been used
-			unordered_map<std::string, unordered_map<std::string,s_soundData> > soundsToAdd = {};
+			std::unordered_map<std::string, std::unordered_map<std::string,s_soundData> > soundsToAdd = {};
 			for(int i = 0; i < soundCategories.size(); i++)
 			{
 				soundsToAdd[soundCategories[i]] = sourceSounds[soundCategories[i]];
@@ -94,7 +94,8 @@ class s_soundPlaylist
 				//Check to see if we found the track we were looking for. If not, we send an error to cerr.
 				if(!foundTrack)
 				{
-					cerr << "stevensSound library error: createPlaylist() : Unable to find requested track '" + trackOrder[i] + "' sounds map.\n"; 
+					void(0);
+					//cerr << "stevensSound library error: createPlaylist() : Unable to find requested track '" + trackOrder[i] + "' sounds map.\n"; 
 				}
 				else
 				{
@@ -188,7 +189,7 @@ class s_soundPlaylist
         */
         void shuffle()
         {
-            std::shuffle(sounds.begin(), sounds.end(), default_random_engine());
+            std::shuffle(sounds.begin(), sounds.end(), std::default_random_engine());
         }
 
 

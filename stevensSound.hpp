@@ -5,13 +5,15 @@
 #include<unordered_map>
 #include<unordered_set>
 #include<vector>
-#include<atomic>
+#include<string>
+#include<algorithm>
+#include<random>
 #include<memory>
 #include<mutex>
-#include<condition_variable>
+#include<thread>
 
 //Custom libraries used here
-#include "libraries/stevensSetLib.h"
+// #include "libraries/stevensSetLib.h"
 
 //Include classes for the library
 #include "classes/s_soundData.h"
@@ -86,7 +88,7 @@ void stevensSound_channelFinishedCallback( const int channel )
 namespace stevensSound
 {
 	/*** Variables ***/
-	std::unordered_map<std::string, unordered_map<std::string, s_soundData> > sounds; //Container of all sounds
+	std::unordered_map<std::string, std::unordered_map<std::string, s_soundData> > sounds; //Container of all sounds
 	std::unordered_map<std::string, s_soundPlaylist> playlists; //Contains all of the playlists created with the stevensSound library
 	std::unordered_map<std::string, s_soundController> soundControllers; //Container of all sound controllers. Controls volume and playback settings for sounds.
 	std::unordered_map<std::string, Mix_Chunk*> persistentChunks; //A map containing the addresses of Mix_Chunks we want to keep stored in memory.
@@ -147,14 +149,15 @@ namespace stevensSound
 			soundDataMap[soundName] = soundData;
 		}
 		//Load the sound files in memory to test if they're able to load
-		std::unordered_map<string, s_soundData>::iterator it;
+		std::unordered_map<std::string, s_soundData>::iterator it;
 		for (it = soundDataMap.begin(); it != soundDataMap.end(); it++)
 		{
 			Mix_Chunk * chunk = Mix_LoadWAV(it->second.filePath);
 			if( chunk == NULL)
 			{
 				//Print an error to cerr if we're unable to load a certain file
-				std::cerr << soundType + " " << it->second.name << " was unable to load!" << Mix_GetError() << endl;
+				// std::cerr << soundType + " " << it->second.name << " was unable to load!" << Mix_GetError() << endl;
+				void(0);
 			}
 			else
 			{
@@ -178,7 +181,7 @@ namespace stevensSound
 	 * 							{	"sfx",		{	{"flapjackScream",	"oooahahhah.wav"},
 	 * 												{"YTMND",	"youreTheManNowDog.wav"	}	}	}
 	 */
-	void init(	std::unordered_map<std::string, unordered_map<std::string, const char *> > soundsParam    )
+	void init(	std::unordered_map<std::string, std::unordered_map<std::string, const char *> > soundsParam    )
 	{
 		//Create music, sfx, and default sound controllers
 		soundControllers = {	{"music",	s_soundController("music",1)},
@@ -287,7 +290,7 @@ namespace stevensSound
 		{
 			std::cout << "stevensSound::storePersistentSound() error, could not find a sound with category \"" + category + "\""
 						 + " and soundName \"" + soundName + "\" in stevensSound::sounds map" << std::endl;
-			getch();
+			getchar();
 			return;
 		}
 		//Is the sound already stored persistently in persistentChunks?
@@ -320,7 +323,7 @@ namespace stevensSound
 			//If not, print an error and return
 			std::cout << "stevensSound::freePersistentSound() error, could not find a sound with category \"" + category + "\""
 						 + " and soundName \"" + soundName + "\" that is persistently stored already" << std::endl;
-			getch();
+			getchar();
 			return;
 		}	
 
@@ -432,7 +435,9 @@ namespace stevensSound
 		if( whenChannelsBusy == "return" )
 		{
 			//Try to find an open channel
+			SDL_LockAudioDevice(1);
 			channel = Mix_PlayChannel( -1, sound, 0 );
+			SDL_UnlockAudioDevice(1);
 		}
 		else if( whenChannelsBusy == "wait" )
 		{
@@ -528,7 +533,7 @@ namespace stevensSound
 		if( !stevensSound::playlists.contains( switchToPlaylist ) )
 		{
 			std::cout << "stevensSound::switchMusicPlaylist() error, switchToPlaylist stored under name \"" << switchToPlaylist << "\" does not exist." << std::endl;
-			getch();
+			getchar();
 			return;
 		}
 		//Also make sure the playlist we are switching from still is stored under the same key in stevensSound::playlists
@@ -537,7 +542,7 @@ namespace stevensSound
 			std::cout << "stevensSound::switchMusicPlaylist() error, the currently playing playlist with name \"" <<
 						 stevensSound::playlists.at("currently playing").getName() << "\" does not have an entry in stevensSound::playlists. "
 						 "Something may have happened to change the name of the playlist." << std::endl;
-			getch();
+			getchar();
 			return;
 		}
 
@@ -630,7 +635,7 @@ namespace stevensSound
 					errorMsg += stevensSound::sounds[categoryName][soundName].filePath;
 					errorMsg += " - Error: ";
 					errorMsg += Mix_GetError();
-					stevensFileLib::appendToFile("errorLog.txt", errorMsg + "\n");
+					//stevensFileLib::appendToFile("errorLog.txt", errorMsg + "\n");
 
 					SDL_ClearError();  // Clear the error state
 					playlist.index++;
