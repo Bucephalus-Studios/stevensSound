@@ -2,9 +2,16 @@
  * An easy-to-use C++ library to interface with SDL 2 for playing sounds in applications.
 */
 //Standard libraries used
+#include<iostream>
+#include<string>
 #include<unordered_map>
 #include<unordered_set>
 #include<vector>
+#include<tuple>
+#include<algorithm>
+#include<random>
+#include<cmath>
+#include<cstdio>
 #include<atomic>
 #include<memory>
 #include<mutex>
@@ -86,7 +93,7 @@ void stevensSound_channelFinishedCallback( const int channel )
 namespace stevensSound
 {
 	/*** Variables ***/
-	std::unordered_map<std::string, unordered_map<std::string, s_soundData> > sounds; //Container of all sounds
+	std::unordered_map<std::string, std::unordered_map<std::string, s_soundData> > sounds; //Container of all sounds
 	std::unordered_map<std::string, s_soundPlaylist> playlists; //Contains all of the playlists created with the stevensSound library
 	std::unordered_map<std::string, s_soundController> soundControllers; //Container of all sound controllers. Controls volume and playback settings for sounds.
 	std::unordered_map<std::string, Mix_Chunk*> persistentChunks; //A map containing the addresses of Mix_Chunks we want to keep stored in memory.
@@ -147,14 +154,14 @@ namespace stevensSound
 			soundDataMap[soundName] = soundData;
 		}
 		//Load the sound files in memory to test if they're able to load
-		std::unordered_map<string, s_soundData>::iterator it;
+		std::unordered_map<std::string, s_soundData>::iterator it;
 		for (it = soundDataMap.begin(); it != soundDataMap.end(); it++)
 		{
 			Mix_Chunk * chunk = Mix_LoadWAV(it->second.filePath);
 			if( chunk == NULL)
 			{
 				//Print an error to cerr if we're unable to load a certain file
-				std::cerr << soundType + " " << it->second.name << " was unable to load!" << Mix_GetError() << endl;
+				std::cerr << soundType + " " << it->second.name << " was unable to load!" << Mix_GetError() << std::endl;
 			}
 			else
 			{
@@ -178,7 +185,7 @@ namespace stevensSound
 	 * 							{	"sfx",		{	{"flapjackScream",	"oooahahhah.wav"},
 	 * 												{"YTMND",	"youreTheManNowDog.wav"	}	}	}
 	 */
-	void init(	std::unordered_map<std::string, unordered_map<std::string, const char *> > soundsParam    )
+	void init(	std::unordered_map<std::string, std::unordered_map<std::string, const char *> > soundsParam    )
 	{
 		//Create music, sfx, and default sound controllers
 		soundControllers = {	{"music",	s_soundController("music",1)},
@@ -348,7 +355,7 @@ namespace stevensSound
 		Mix_Chunk* sound = persistentChunks.at( category + "/" + soundName );
 
 		//Control the playback
-		Mix_VolumeChunk(sound, (int)round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
+		Mix_VolumeChunk(sound, (int)std::round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
 
 		/***** PLAY THE SOUND *****/
 		int channel = -1;
@@ -425,7 +432,7 @@ namespace stevensSound
 		}
 
 		//Control the playback
-		Mix_VolumeChunk(sound, (int)round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
+		Mix_VolumeChunk(sound, (int)std::round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
 
 		/***** PLAY THE SOUND *****/
 		int channel = -1;
