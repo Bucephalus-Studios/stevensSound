@@ -15,10 +15,10 @@
 #include<atomic>
 #include<memory>
 #include<mutex>
-#include<condition_variable>
+#include<thread>
 
 //Custom libraries used here
-#include "libraries/stevensSetLib.h"
+// #include "libraries/stevensSetLib.h"
 
 //Include classes for the library
 #include "classes/s_soundData.h"
@@ -294,7 +294,7 @@ namespace stevensSound
 		{
 			std::cout << "stevensSound::storePersistentSound() error, could not find a sound with category \"" + category + "\""
 						 + " and soundName \"" + soundName + "\" in stevensSound::sounds map" << std::endl;
-			getch();
+			getchar();
 			return;
 		}
 		//Is the sound already stored persistently in persistentChunks?
@@ -327,7 +327,7 @@ namespace stevensSound
 			//If not, print an error and return
 			std::cout << "stevensSound::freePersistentSound() error, could not find a sound with category \"" + category + "\""
 						 + " and soundName \"" + soundName + "\" that is persistently stored already" << std::endl;
-			getch();
+			getchar();
 			return;
 		}	
 
@@ -439,7 +439,9 @@ namespace stevensSound
 		if( whenChannelsBusy == "return" )
 		{
 			//Try to find an open channel
+			SDL_LockAudioDevice(1);
 			channel = Mix_PlayChannel( -1, sound, 0 );
+			SDL_UnlockAudioDevice(1);
 		}
 		else if( whenChannelsBusy == "wait" )
 		{
@@ -535,7 +537,7 @@ namespace stevensSound
 		if( !stevensSound::playlists.contains( switchToPlaylist ) )
 		{
 			std::cout << "stevensSound::switchMusicPlaylist() error, switchToPlaylist stored under name \"" << switchToPlaylist << "\" does not exist." << std::endl;
-			getch();
+			getchar();
 			return;
 		}
 		//Also make sure the playlist we are switching from still is stored under the same key in stevensSound::playlists
@@ -544,7 +546,7 @@ namespace stevensSound
 			std::cout << "stevensSound::switchMusicPlaylist() error, the currently playing playlist with name \"" <<
 						 stevensSound::playlists.at("currently playing").getName() << "\" does not have an entry in stevensSound::playlists. "
 						 "Something may have happened to change the name of the playlist." << std::endl;
-			getch();
+			getchar();
 			return;
 		}
 
@@ -637,7 +639,7 @@ namespace stevensSound
 					errorMsg += stevensSound::sounds[categoryName][soundName].filePath;
 					errorMsg += " - Error: ";
 					errorMsg += Mix_GetError();
-					stevensFileLib::appendToFile("errorLog.txt", errorMsg + "\n");
+					//stevensFileLib::appendToFile("errorLog.txt", errorMsg + "\n");
 
 					SDL_ClearError();  // Clear the error state
 					playlist.index++;
