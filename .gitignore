@@ -24,9 +24,13 @@ cmake_install.cmake
 CPackConfig.cmake
 CPackSourceConfig.cmake
 
-# Test/Benchmark binaries
-tests/test_*
-benchmarks/benchmark_*
+# Test/Benchmark binaries (compiled files only, not source)
+tests/**/test_*
+!tests/**/*.cpp
+!tests/**/*.h
+benchmarks/**/benchmark_*
+!benchmarks/**/*.cpp
+!benchmarks/**/*.h
 
 # OS specific
 .DS_Store
