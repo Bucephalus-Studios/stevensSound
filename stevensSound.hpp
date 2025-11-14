@@ -19,6 +19,7 @@
 #include "classes/s_soundData.h"
 #include "classes/s_soundController.h"
 #include "classes/s_soundPlaylist.h"
+#include "classes/s_errorHandler.h"
 
 /*
 SDL supports windows and mac, so we may not need platform specific sound for windows mac and linux. Possibly for mobile though.
@@ -170,25 +171,26 @@ namespace stevensSound
 
 
 	/**
-	 * @brief Initializes the sound controllers and loads sound data into this library's sounds map.createPlaylist	
+	 * @brief Initializes the sound controllers and loads sound data into this library's sounds map.createPlaylist
 	 * 		  Must be called before using this library.
-	 * 
-	 * @param soundsParam An outer map of sound categories as keys paired with values of maps with keys of 
+	 *
+	 * @param soundsParam An outer map of sound categories as keys paired with values of maps with keys of
 	 * 					  sound names and values of filepaths to the sounds.
 	 * 						{	{	"music",	{	{"song1", "ogeechee hymnal.wav"},
 	 * 												{"song2", "the sky is red.wav"},
 	 * 												{"song3", "the hampster dance.wav"}	}	},
 	 * 							{	"sfx",		{	{"flapjackScream",	"oooahahhah.wav"},
 	 * 												{"YTMND",	"youreTheManNowDog.wav"	}	}	}
+	 * @return True if initialization was successful, false otherwise
 	 */
-	void init(	std::unordered_map<std::string, std::unordered_map<std::string, const char *> > soundsParam    )
+	bool init(	std::unordered_map<std::string, std::unordered_map<std::string, const char *> > soundsParam    )
 	{
 		//Create music, sfx, and default sound controllers
 		soundControllers = {	{"music",	s_soundController("music",1)},
 								{"sfx",		s_soundController("sfx",1)},
 								{"default",	s_soundController()}		};
 
-		//Initialize each type of sound we passed in as a parameter 
+		//Initialize each type of sound we passed in as a parameter
 		sounds = {};
 		for(auto & [soundType, soundMap] : soundsParam)
 		{
@@ -196,10 +198,20 @@ namespace stevensSound
 		}
 
 		stevensSound::audioChange = false;
-		Mix_AllocateChannels(16);
+
+		int channels = Mix_AllocateChannels(16);
+		if (channels != 16)
+		{
+			ErrorHandler::setError(ErrorLevel::WARNING,
+				"Failed to allocate 16 channels, got " + std::to_string(channels),
+				"init");
+		}
 
 		//Initialize our playlists container to be empty other than having an empty "currently playing" playlist
 		playlists.emplace( "currently playing", s_soundPlaylist() );
+
+		ErrorHandler::setError(ErrorLevel::INFO, "stevensSound initialized successfully", "init");
+		return true;
 	}
 
 
@@ -288,9 +300,9 @@ namespace stevensSound
 		//Check to see if the sound exists in sounds
 		if( !stevensSound::soundsContains( category, soundName ) )
 		{
-			std::cout << "stevensSound::storePersistentSound() error, could not find a sound with category \"" + category + "\""
-						 + " and soundName \"" + soundName + "\" in stevensSound::sounds map" << std::endl;
-			getchar();
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Could not find sound with category \"" + category + "\" and name \"" + soundName + "\"",
+				"storePersistentSound");
 			return;
 		}
 		//Is the sound already stored persistently in persistentChunks?
@@ -320,10 +332,9 @@ namespace stevensSound
 		//Is the sound stored persistently in persistentChunks?
 		if( !stevensSound::isPersistentlyStored( category, soundName ) )
 		{
-			//If not, print an error and return
-			std::cout << "stevensSound::freePersistentSound() error, could not find a sound with category \"" + category + "\""
-						 + " and soundName \"" + soundName + "\" that is persistently stored already" << std::endl;
-			getchar();
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Sound with category \"" + category + "\" and name \"" + soundName + "\" is not persistently stored",
+				"freePersistentSound");
 			return;
 		}	
 
@@ -406,10 +417,9 @@ namespace stevensSound
 		//Also check: is the category and soundName combo an existing sound in the 2D sounds map?
 		else if( !stevensSound::soundsContains( category, soundName ) )
 		{
-			//If not, print an error and return
-			std::string errorMsg = "stevensSound::playSound() error, requested to play sound with category \"" + category + "\" and name \""
-								   + soundName + "\", but no such sound matching the category and name exists in stevensSound::sounds";
-			std::cout << errorMsg << std::endl;
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Requested to play sound with category \"" + category + "\" and name \"" + soundName + "\", but it does not exist",
+				"playSound");
 			return;
 		}
 
@@ -418,6 +428,9 @@ namespace stevensSound
 		//If the sound doesn't load, return
 		if( !sound )
 		{
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Failed to load sound file: " + std::string(sounds[category][soundName].filePath) + " - " + Mix_GetError(),
+				"playSound");
 			return;
 		}
 
@@ -427,8 +440,20 @@ namespace stevensSound
 			stevensSound_chunkPool.insert(sound);
 		}
 
-		//Control the playback
-		Mix_VolumeChunk(sound, (int)round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
+		// Get audio effects for this sound
+		AudioEffects effects = AudioEffectsManager::getEffects(category, soundName);
+
+		// Apply random pitch variation if enabled
+		if (effects.randomizePitch)
+		{
+			float randomVar = AudioEffectsManager::getRandomPitchVariation(effects.randomRange);
+			effects.pitchVariation += randomVar;
+		}
+
+		//Control the playback with effects
+		float baseVolume = soundControllers[sounds[category][soundName].controllerId].volume;
+		float effectiveVolume = AudioEffectsManager::calculateEffectiveVolume(baseVolume, effects);
+		Mix_VolumeChunk(sound, (int)round(128 * effectiveVolume));
 
 		/***** PLAY THE SOUND *****/
 		int channel = -1;
@@ -438,6 +463,12 @@ namespace stevensSound
 			SDL_LockAudioDevice(1);
 			channel = Mix_PlayChannel( -1, sound, 0 );
 			SDL_UnlockAudioDevice(1);
+
+			// Apply audio effects to the channel
+			if (channel != -1)
+			{
+				AudioEffectsManager::applyEffectsToChannel(channel, effects);
+			}
 		}
 		else if( whenChannelsBusy == "wait" )
 		{
@@ -449,6 +480,12 @@ namespace stevensSound
 				{
 					SDL_Delay(10); // Small delay to prevent busy-waiting
 				}
+			}
+
+			// Apply audio effects to the channel
+			if (channel != -1)
+			{
+				AudioEffectsManager::applyEffectsToChannel(channel, effects);
 			}
 		}
 		else //steal channel
@@ -532,17 +569,17 @@ namespace stevensSound
 		//Before we try a switch, make sure the playlist we want to switch to exists
 		if( !stevensSound::playlists.contains( switchToPlaylist ) )
 		{
-			std::cout << "stevensSound::switchMusicPlaylist() error, switchToPlaylist stored under name \"" << switchToPlaylist << "\" does not exist." << std::endl;
-			getchar();
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Playlist \"" + switchToPlaylist + "\" does not exist",
+				"switchMusicPlaylist");
 			return;
 		}
 		//Also make sure the playlist we are switching from still is stored under the same key in stevensSound::playlists
 		if( !stevensSound::playlists.contains( stevensSound::playlists.at("currently playing").getName() ) )
 		{
-			std::cout << "stevensSound::switchMusicPlaylist() error, the currently playing playlist with name \"" <<
-						 stevensSound::playlists.at("currently playing").getName() << "\" does not have an entry in stevensSound::playlists. "
-						 "Something may have happened to change the name of the playlist." << std::endl;
-			getchar();
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Currently playing playlist \"" + stevensSound::playlists.at("currently playing").getName() + "\" does not exist in playlists map",
+				"switchMusicPlaylist");
 			return;
 		}
 
@@ -771,23 +808,34 @@ namespace stevensSound
 
 /**
  * @brief Initializes the SDL and SDL mixer libraries so they can be interfaced with.
+ * @return True if initialization was successful, false otherwise
 */
-void initSound()
+bool initSound()
 {
 	//Initialize SDL
 	if( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_AUDIO ) < 0 )
 	{
-		printf( "SDL could not initialize! SDL Error: %s\n", SDL_GetError() );
+		stevensSound::ErrorHandler::setError(stevensSound::ErrorLevel::CRITICAL,
+			"SDL could not initialize! SDL Error: " + std::string(SDL_GetError()),
+			"initSound");
+		return false;
 	}
 	//Initialize SDL_mixer
 	if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 ) < 0 )
 	{
-		printf( "SDL_mixer could not initialize! SDL_mixer Error: %s\n", Mix_GetError() );
+		stevensSound::ErrorHandler::setError(stevensSound::ErrorLevel::CRITICAL,
+			"SDL_mixer could not initialize! SDL_mixer Error: " + std::string(Mix_GetError()),
+			"initSound");
+		SDL_Quit();
+		return false;
 	}
 
-	
-
 	Mix_ChannelFinished(stevensSound_channelFinishedCallback);
+
+	stevensSound::ErrorHandler::setError(stevensSound::ErrorLevel::INFO,
+		"SDL and SDL_mixer initialized successfully",
+		"initSound");
+	return true;
 }
 
 
