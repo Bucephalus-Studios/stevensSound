@@ -84,7 +84,7 @@ class s_soundPlaylist
 					if(soundsToAdd[soundCategories[k]].contains(trackOrder[i]))
 					{
 						//Yes, we add it to the playlist
-						sounds.push_back(make_tuple(soundCategories[k],trackOrder[i]));
+						sounds.push_back(std::make_tuple(soundCategories[k],trackOrder[i]));
 						//Erase it from the soundsToAdd map
 						soundsToAdd[soundCategories[k]].erase(trackOrder[i]);
 						foundTrack = true;
@@ -94,8 +94,7 @@ class s_soundPlaylist
 				//Check to see if we found the track we were looking for. If not, we send an error to cerr.
 				if(!foundTrack)
 				{
-					void(0);
-					//cerr << "stevensSound library error: createPlaylist() : Unable to find requested track '" + trackOrder[i] + "' sounds map.\n"; 
+					std::cerr << "stevensSound library error: createPlaylist() : Unable to find requested track '" + trackOrder[i] + "' sounds map.\n"; 
 				}
 				else
 				{
@@ -118,7 +117,7 @@ class s_soundPlaylist
 					std::advance(sound_it, rand() % soundsToAdd[random_category].size());
 					std::string random_sound = sound_it->first;
 					//Add the sound to the playlist
-					sounds.push_back(make_tuple(random_category,random_sound));
+					sounds.push_back(std::make_tuple(random_category,random_sound));
 					//Erase the sound from the category
 					soundsToAdd[random_category].erase(random_sound);
 					//If the category is empty, erase it from the soundsToAdd unordered map

@@ -2,12 +2,17 @@
  * An easy-to-use C++ library to interface with SDL 2 for playing sounds in applications.
 */
 //Standard libraries used
+#include<iostream>
+#include<string>
 #include<unordered_map>
 #include<unordered_set>
 #include<vector>
-#include<string>
+#include<tuple>
 #include<algorithm>
 #include<random>
+#include<cmath>
+#include<cstdio>
+#include<atomic>
 #include<memory>
 #include<mutex>
 #include<thread>
@@ -156,8 +161,7 @@ namespace stevensSound
 			if( chunk == NULL)
 			{
 				//Print an error to cerr if we're unable to load a certain file
-				// std::cerr << soundType + " " << it->second.name << " was unable to load!" << Mix_GetError() << endl;
-				void(0);
+				std::cerr << soundType + " " << it->second.name << " was unable to load!" << Mix_GetError() << std::endl;
 			}
 			else
 			{
@@ -351,7 +355,7 @@ namespace stevensSound
 		Mix_Chunk* sound = persistentChunks.at( category + "/" + soundName );
 
 		//Control the playback
-		Mix_VolumeChunk(sound, (int)round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
+		Mix_VolumeChunk(sound, (int)std::round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
 
 		/***** PLAY THE SOUND *****/
 		int channel = -1;
@@ -428,7 +432,7 @@ namespace stevensSound
 		}
 
 		//Control the playback
-		Mix_VolumeChunk(sound, (int)round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
+		Mix_VolumeChunk(sound, (int)std::round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
 
 		/***** PLAY THE SOUND *****/
 		int channel = -1;
