@@ -163,10 +163,10 @@ namespace stevensSound
     };
 
     // Static member initialization
-    thread_local ErrorInfo ErrorHandler::lastError;
-    std::function<void(const ErrorInfo&)> ErrorHandler::customHandler = nullptr;
-    std::mutex ErrorHandler::handlerMutex;
-    bool ErrorHandler::enableLogging = false;
+    inline thread_local ErrorInfo ErrorHandler::lastError;
+    inline std::function<void(const ErrorInfo&)> ErrorHandler::customHandler = nullptr;
+    inline std::mutex ErrorHandler::handlerMutex;
+    inline bool ErrorHandler::enableLogging = false;
 
 } // namespace stevensSound
 

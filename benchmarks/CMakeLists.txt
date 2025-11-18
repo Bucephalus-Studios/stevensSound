@@ -101,9 +101,9 @@ target_link_libraries(benchmarks
         benchmark::benchmark_main
 )
 
-# Copy benchmark assets to build directory if they exist
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/benchmark_assets)
-    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/benchmark_assets
+# Copy test assets to build directory if they exist
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_assets)
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../test_assets
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
     )
 endif()

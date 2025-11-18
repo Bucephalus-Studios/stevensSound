@@ -47,7 +47,7 @@ static std::unordered_set< Mix_Chunk* > stevensSound_chunkPool;
 /**
  * @brief Checks to see if a given Mix_Chunk is actively playing on a channel
  */
-inline bool stevensSound_isChunkPlaying( Mix_Chunk * chunk )
+bool stevensSound_isChunkPlaying( Mix_Chunk * chunk )
 {
 	// Iterate all channels (Mix_AllocateChannels(-1) returns the current number of channels)
 	for (int i = 0; i < Mix_AllocateChannels(-1); i++)
@@ -64,7 +64,7 @@ inline bool stevensSound_isChunkPlaying( Mix_Chunk * chunk )
 /**
  * @brief When a channel finishes playing, frees the Mix_Chunk from memory.
  */
-inline void stevensSound_channelFinishedCallback( const int channel )
+void stevensSound_channelFinishedCallback( const int channel )
 {
 	//stevensFileLib::appendToFile( "stevensSound.log", "Channel finished: " + std::to_string(channel) + "\n" );
 
@@ -95,20 +95,20 @@ inline void stevensSound_channelFinishedCallback( const int channel )
 namespace stevensSound
 {
 	/*** Variables ***/
-	inline std::unordered_map<std::string, std::unordered_map<std::string, s_soundData> > sounds; //Container of all sounds
-	inline std::unordered_map<std::string, s_soundPlaylist> playlists; //Contains all of the playlists created with the stevensSound library
-	inline std::unordered_map<std::string, s_soundController> soundControllers; //Container of all sound controllers. Controls volume and playback settings for sounds.
-	inline std::unordered_map<std::string, Mix_Chunk*> persistentChunks; //A map containing the addresses of Mix_Chunks we want to keep stored in memory.
+	std::unordered_map<std::string, std::unordered_map<std::string, s_soundData> > sounds; //Container of all sounds
+	std::unordered_map<std::string, s_soundPlaylist> playlists; //Contains all of the playlists created with the stevensSound library
+	std::unordered_map<std::string, s_soundController> soundControllers; //Container of all sound controllers. Controls volume and playback settings for sounds.
+	std::unordered_map<std::string, Mix_Chunk*> persistentChunks; //A map containing the addresses of Mix_Chunks we want to keep stored in memory.
 																  //The benefit of this is we don't have to load these sounds into memory and free them
 																  //on each use.
-	inline bool audioChange; //Bool used to control when currently audio playback is modified in any way
+	bool audioChange; //Bool used to control when currently audio playback is modified in any way
 
 
 	/*** Methods ***/
 	/**
 	 * @brief Returns a string containing the version information of SDL and SDL_mixer.
 	 */
-	inline 	std::string getSDLVersionInfo()
+	std::string getSDLVersionInfo()
 	{
 		SDL_version sdl_ver, mix_ver;
     	SDL_GetVersion(&sdl_ver);
@@ -141,7 +141,7 @@ namespace stevensSound
 	 *                                            sound needed for it to be used in this library respectively.
 	 *  
 	*/
-	inline 	std::unordered_map<std::string, s_soundData> loadSoundData(	std::unordered_map<std::string, const char *> soundNamesnPaths,
+	std::unordered_map<std::string, s_soundData> loadSoundData(	std::unordered_map<std::string, const char *> soundNamesnPaths,
 																std::string soundType,
 																std::string controllerId  )
 	{
@@ -188,7 +188,7 @@ namespace stevensSound
 	 * 												{"YTMND",	"youreTheManNowDog.wav"	}	}	}
 	 * @return True if initialization was successful, false otherwise
 	 */
-	inline 	bool init(	std::unordered_map<std::string, std::unordered_map<std::string, const char *> > soundsParam    )
+	bool init(	std::unordered_map<std::string, std::unordered_map<std::string, const char *> > soundsParam    )
 	{
 		//Create music, sfx, and default sound controllers
 		soundControllers = {	{"music",	s_soundController("music",1)},
@@ -223,7 +223,7 @@ namespace stevensSound
 	/**
 	 * @brief Frees all of the chunks that we've allocated in non-persistent storage
 	 */
-	inline 	void freeChunks()
+	void freeChunks()
 	{
 		std::lock_guard<std::mutex> lock(stevensSound_chunkMutex);
 		std::vector<Mix_Chunk*> toDelete;
@@ -249,7 +249,7 @@ namespace stevensSound
 	/**
 	 * @brief Used to free all of the persistent chunks stored in memory during shutdown of stevensSound library and SDL Mixer.
 	 */
-	inline 	void freePersistentChunks()
+	void freePersistentChunks()
 	{
 		std::lock_guard<std::mutex> lock(stevensSound_chunkMutex);
 
@@ -271,7 +271,7 @@ namespace stevensSound
 	 * @param category The category the sound is stored under in the sounds map
 	 * @param soundName The identifying name of the sound
 	 */
-	inline 	bool isPersistentlyStored(	const std::string & category,
+	bool isPersistentlyStored(	const std::string & category,
 								const std::string & soundName	)
 	{
 		return stevensSound::persistentChunks.contains( category + "/" + soundName );
@@ -282,7 +282,7 @@ namespace stevensSound
 	 * @brief Returns true if we have an entry in the sounds map with a matching category and
 	 * 		  soundName.
 	 */
-	inline 	bool soundsContains(	const std::string & category,
+	bool soundsContains(	const std::string & category,
 							const std::string & soundName	)
 	{
 		if( stevensSound::sounds.contains( category ) ) 
@@ -299,7 +299,7 @@ namespace stevensSound
 	 * @param cateogry The category the soudn is stored under in the sounds map
 	 * @param soundName THe identifying name of the sound
 	 */
-	inline 	void storePersistentSound(	const std::string & category,
+	void storePersistentSound(	const std::string & category,
 								const std::string & soundName	)
 	{
 		//Check to see if the sound exists in sounds
@@ -331,7 +331,7 @@ namespace stevensSound
 	 * @param cateogry The category the soudn is stored under in the sounds map
 	 * @param soundName THe identifying name of the sound
 	 */
-	inline 	void freePersistentSound(	const std::string & category,
+	void freePersistentSound(	const std::string & category,
 								const std::string & soundName	)
 	{
 		//Is the sound stored persistently in persistentChunks?
@@ -357,7 +357,7 @@ namespace stevensSound
 	 * @param category The category in the sounds map that the sound is stored under
 	 * @param soundName The identifying name of the sound
 	 */
-	inline 	void playPersistentSound(	const std::string & category,
+	void playPersistentSound(	const std::string & category,
 								const std::string & soundName,
 								const std::string & whenChannelsBusy = "return"	)
 	{
@@ -408,7 +408,7 @@ namespace stevensSound
 	 * Returns:
 	 * 	void, but plays sounds
 	*/
-	inline 	void playSound(	const std::string & category,
+	void playSound(	const std::string & category,
 					const std::string & soundName,
 					const std::string & whenChannelsBusy = "return"	)
 	{
@@ -523,7 +523,7 @@ namespace stevensSound
 	}
 
 
-	inline 	void playSound_detached(	const std::string & category,
+	void playSound_detached(	const std::string & category,
 								const std::string & soundName,
 								const std::string & whenChannelsBusy = "return"	)
 	{
@@ -548,7 +548,7 @@ namespace stevensSound
 	 * Returns:
 	 * 	void, but creates a playlist that will be stored under the given playlist name in the playlists map.
 	*/
-	inline void createPlaylist(	std::string playlistName,
+	void createPlaylist(	std::string playlistName,
 							std::string controllerId,
 							std::vector<std::string> soundCategoriesUsed,
 							std::vector<std::string> trackOrder,
@@ -569,7 +569,7 @@ namespace stevensSound
 	 * 
 	 * @param switchToPlaylist The playlist that we are switching to start playing the music of
 	 */
-	inline 	void switchMusicPlaylist(	const std::string & switchToPlaylist	)
+	void switchMusicPlaylist(	const std::string & switchToPlaylist	)
 	{
 		//Before we try a switch, make sure the playlist we want to switch to exists
 		if( !stevensSound::playlists.contains( switchToPlaylist ) )
@@ -613,7 +613,7 @@ namespace stevensSound
 	/**
 	 * @brief Stops the currently playing playlist on a separate thread.
 	 */
-	inline 	void stopMusicPlaylist()
+	void stopMusicPlaylist()
 	{
 		//Stop the current music
 		stevensSound::playlists.at("currently playing").status = "stopped";
@@ -641,7 +641,7 @@ namespace stevensSound
 	 * 		void
 	 * 
 	 **/
-	inline 	void playMusicPlaylist(	s_soundPlaylist & playlist,
+	void playMusicPlaylist(	s_soundPlaylist & playlist,
 							std::string onCompletion = "end")
 	{
 		playlist.status = "playing";
@@ -780,7 +780,7 @@ namespace stevensSound
 	 * 		  coming into a memory conflict of playing the same playlist by reference while it's already playing (remember the error
 	 * 		  of combat sound effects throwing memory error when we mashed through combat)
 	 */
-	inline 	void playPlaylist(	s_soundPlaylist playlist	)
+	void playPlaylist(	s_soundPlaylist playlist	)
 	{
 		playlist.status = "playing";
 		std::string categoryName; //The category of the sound that is currently playing
@@ -815,7 +815,7 @@ namespace stevensSound
  * @brief Initializes the SDL and SDL mixer libraries so they can be interfaced with.
  * @return True if initialization was successful, false otherwise
 */
-inline bool initSound()
+bool initSound()
 {
 	//Initialize SDL
 	if( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_AUDIO ) < 0 )
@@ -847,7 +847,7 @@ inline bool initSound()
 /**
  * @brief Closes the SDL and SDL mixer libraries.
 */
-inline void closeSound()
+void closeSound()
 {
 	// Step 1: Disable callback functions 
 	Mix_ChannelFinished(nullptr);

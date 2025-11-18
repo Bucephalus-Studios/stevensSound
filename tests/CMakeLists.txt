@@ -109,8 +109,8 @@ target_link_libraries(tests
 gtest_discover_tests(tests)
 
 # Copy test assets to build directory if they exist
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_assets)
-    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/test_assets
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_assets)
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../test_assets
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
     )
 endif()

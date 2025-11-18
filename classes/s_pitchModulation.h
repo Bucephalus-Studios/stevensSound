@@ -231,9 +231,9 @@ namespace stevensSound
     };
 
     // Static member initialization
-    std::unordered_map<std::string, AudioEffects> AudioEffectsManager::effectsMap;
-    std::mt19937 AudioEffectsManager::randomGenerator(std::random_device{}());
-    std::uniform_real_distribution<float> AudioEffectsManager::distribution(0.0f, 1.0f);
+    inline std::unordered_map<std::string, AudioEffects> AudioEffectsManager::effectsMap;
+    inline std::mt19937 AudioEffectsManager::randomGenerator(std::random_device{}());
+    inline std::uniform_real_distribution<float> AudioEffectsManager::distribution(0.0f, 1.0f);
 
     /**
      * @brief Helper function to set up anti-fatigue sound effects
