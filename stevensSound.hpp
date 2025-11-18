@@ -17,15 +17,6 @@
 #include<mutex>
 #include<thread>
 
-//Custom libraries used here
-// #include "libraries/stevensSetLib.h"
-
-//Include classes for the library
-#include "classes/s_soundData.h"
-#include "classes/s_soundController.h"
-#include "classes/s_soundPlaylist.h"
-#include "classes/s_errorHandler.h"
-
 /*
 SDL supports windows and mac, so we may not need platform specific sound for windows mac and linux. Possibly for mobile though.
 */
@@ -36,6 +27,16 @@ SDL supports windows and mac, so we may not need platform specific sound for win
     #include<SDL2/SDL.h>
 	#include<SDL2/SDL_mixer.h>
 #endif
+
+//Custom libraries used here
+// #include "libraries/stevensSetLib.h"
+
+//Include classes for the library
+#include "classes/s_soundData.h"
+#include "classes/s_soundController.h"
+#include "classes/s_soundPlaylist.h"
+#include "classes/s_errorHandler.h"
+#include "classes/s_pitchModulation.h"
 
 
 /***** Global functions and variables used for managing Mix_Chunk memory *****/

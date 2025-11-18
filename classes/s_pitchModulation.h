@@ -174,27 +174,27 @@ namespace stevensSound
             //  0.0 = center (255, 255)
             //  1.0 = full right (0, 255)
 
-            Uint8 left, right;
+            Uint8 leftChannel, rightChannel;
             if (effects.panPosition < 0.0f)
             {
                 // Pan to left
-                left = 255;
-                right = static_cast<Uint8>(255 * (1.0f + effects.panPosition));
+                leftChannel = 255;
+                rightChannel = static_cast<Uint8>(255 * (1.0f + effects.panPosition));
             }
             else if (effects.panPosition > 0.0f)
             {
                 // Pan to right
-                left = static_cast<Uint8>(255 * (1.0f - effects.panPosition));
-                right = 255;
+                leftChannel = static_cast<Uint8>(255 * (1.0f - effects.panPosition));
+                rightChannel = 255;
             }
             else
             {
                 // Center
-                left = 255;
-                right = 255;
+                leftChannel = 255;
+                rightChannel = 255;
             }
 
-            Mix_SetPanning(channel, left, right);
+            Mix_SetPanning(channel, leftChannel, rightChannel);
 
             // Note: Pitch shifting requires external libraries
             // The pitchVariation field is reserved for future use
