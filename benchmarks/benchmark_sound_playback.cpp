@@ -7,7 +7,7 @@
 #include "../stevensSound.hpp"
 
 // Benchmark playlist creation
-static void BM_CreatePlaylist(benchmark::State& state)
+static void CreatePlaylist(benchmark::State& state)
 {
     initSound();
 
@@ -29,10 +29,10 @@ static void BM_CreatePlaylist(benchmark::State& state)
 
     closeSound();
 }
-BENCHMARK(BM_CreatePlaylist);
+BENCHMARK(CreatePlaylist);
 
 // Benchmark volume controller access
-static void BM_VolumeControllerAccess(benchmark::State& state)
+static void VolumeControllerAccess(benchmark::State& state)
 {
     initSound();
 
@@ -49,10 +49,10 @@ static void BM_VolumeControllerAccess(benchmark::State& state)
 
     closeSound();
 }
-BENCHMARK(BM_VolumeControllerAccess);
+BENCHMARK(VolumeControllerAccess);
 
 // Benchmark isPersistentlyStored check
-static void BM_IsPersistentlyStored(benchmark::State& state)
+static void IsPersistentlyStored(benchmark::State& state)
 {
     initSound();
 
@@ -69,10 +69,10 @@ static void BM_IsPersistentlyStored(benchmark::State& state)
 
     closeSound();
 }
-BENCHMARK(BM_IsPersistentlyStored);
+BENCHMARK(IsPersistentlyStored);
 
 // Benchmark error checking
-static void BM_ErrorChecking(benchmark::State& state)
+static void ErrorChecking(benchmark::State& state)
 {
     using namespace stevensSound;
 
@@ -81,4 +81,4 @@ static void BM_ErrorChecking(benchmark::State& state)
         benchmark::DoNotOptimize(ErrorHandler::hasError());
     }
 }
-BENCHMARK(BM_ErrorChecking);
+BENCHMARK(ErrorChecking);

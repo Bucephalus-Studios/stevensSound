@@ -7,14 +7,10 @@
 #include "../stevensSound.hpp"
 
 // Benchmark initialization
-static void BM_InitSound(benchmark::State& state)
+static void InitSound(benchmark::State& state)
 {
     for (auto _ : state)
     {
-        state.PauseTiming();
-        closeSound();
-        state.ResumeTiming();
-
         initSound();
 
         state.PauseTiming();
@@ -22,10 +18,10 @@ static void BM_InitSound(benchmark::State& state)
         state.ResumeTiming();
     }
 }
-BENCHMARK(BM_InitSound);
+BENCHMARK(InitSound);
 
 // Benchmark library initialization
-static void BM_InitLibrary(benchmark::State& state)
+static void InitLibrary(benchmark::State& state)
 {
     initSound();
 
@@ -41,10 +37,10 @@ static void BM_InitLibrary(benchmark::State& state)
 
     closeSound();
 }
-BENCHMARK(BM_InitLibrary);
+BENCHMARK(InitLibrary);
 
 // Benchmark error handling overhead
-static void BM_ErrorHandling(benchmark::State& state)
+static void ErrorHandling(benchmark::State& state)
 {
     using namespace stevensSound;
 
@@ -55,10 +51,10 @@ static void BM_ErrorHandling(benchmark::State& state)
         ErrorHandler::clearError();
     }
 }
-BENCHMARK(BM_ErrorHandling);
+BENCHMARK(ErrorHandling);
 
 // Benchmark soundsContains check
-static void BM_SoundsContains(benchmark::State& state)
+static void SoundsContains(benchmark::State& state)
 {
     initSound();
 
@@ -76,4 +72,4 @@ static void BM_SoundsContains(benchmark::State& state)
 
     closeSound();
 }
-BENCHMARK(BM_SoundsContains);
+BENCHMARK(SoundsContains);
