@@ -54,6 +54,7 @@ if(NOT TARGET stevensSound)
     set(SDL2MIXER_OPUS OFF CACHE BOOL "" FORCE)
     set(SDL2MIXER_MOD OFF CACHE BOOL "" FORCE)
     set(SDL2MIXER_MIDI OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(SDL2_mixer)
 
     # Fetch SoundTouch library for pitch shifting

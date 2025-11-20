@@ -21,7 +21,7 @@
 #include <vector>
 #include <memory>
 #include <cstring>
-#include <soundtouch/SoundTouch.h>
+#include <SoundTouch.h>
 
 #if defined(__linux__)
     #include <SDL2/SDL_mixer.h>
@@ -291,10 +291,10 @@ namespace stevensSound
         soundTouch.flush();
 
         // Get the output samples
-        int expectedOutputSamples = static_cast<int>(numSamples * soundTouch.getOutputLengthRatio());
-        std::vector<float> outputSamples(expectedOutputSamples * CHANNELS);
+        int availableSamples = soundTouch.numSamples();
+        std::vector<float> outputSamples(availableSamples * CHANNELS);
 
-        int receivedSamples = soundTouch.receiveSamples(outputSamples.data(), expectedOutputSamples);
+        int receivedSamples = soundTouch.receiveSamples(outputSamples.data(), availableSamples);
 
         if (receivedSamples == 0)
         {

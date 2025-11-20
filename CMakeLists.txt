@@ -49,6 +49,7 @@ set(SDL2MIXER_FLAC ON CACHE BOOL "" FORCE)
 set(SDL2MIXER_OPUS OFF CACHE BOOL "" FORCE)
 set(SDL2MIXER_MOD OFF CACHE BOOL "" FORCE)
 set(SDL2MIXER_MIDI OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL2_mixer)
 
 # Fetch SoundTouch library for pitch shifting
@@ -63,11 +64,25 @@ FetchContent_Declare(
 set(SOUNDTOUCH_DLL OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SoundTouch)
 
+# Create a wrapper include directory with SDL2 subdirectory
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sdl_includes/SDL2)
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${SDL2_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}/sdl_includes/SDL2
+)
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${SDL2_mixer_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}/sdl_includes/SDL2
+)
+
 # Create interface library for stevensSound (header-only)
 add_library(stevensSound INTERFACE)
 target_include_directories(stevensSound INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/sdl_includes>
 )
 
 # Link SDL2 and SDL2_mixer
@@ -99,10 +114,17 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(stevensSound INTERFACE dl)
 endif()
 
-# Option to build tests, examples, and benchmarks
-option(STEVENSSOUND_BUILD_TESTS "Build tests" OFF)
-option(STEVENSSOUND_BUILD_EXAMPLES "Build examples" OFF)
-option(STEVENSSOUND_BUILD_BENCHMARKS "Build benchmarks" OFF)
+# If this is the main project (not included via add_subdirectory), build tests by default
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    message(STATUS "stevensSound: Building as standalone project - tests, examples, and benchmarks enabled")
+    option(STEVENSSOUND_BUILD_TESTS "Build tests" ON)
+    option(STEVENSSOUND_BUILD_EXAMPLES "Build examples" ON)
+    option(STEVENSSOUND_BUILD_BENCHMARKS "Build benchmarks" ON)
+else()
+    option(STEVENSSOUND_BUILD_TESTS "Build tests" OFF)
+    option(STEVENSSOUND_BUILD_EXAMPLES "Build examples" OFF)
+    option(STEVENSSOUND_BUILD_BENCHMARKS "Build benchmarks" OFF)
+endif()
 
 if(STEVENSSOUND_BUILD_TESTS)
     add_subdirectory(tests)
@@ -114,24 +136,4 @@ endif()
 
 if(STEVENSSOUND_BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
-endif()
-
-# If this is the main project (not included via add_subdirectory), build tests by default
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-    message(STATUS "stevensSound: Building as standalone project - tests, examples, and benchmarks enabled")
-    set(STEVENSSOUND_BUILD_TESTS ON CACHE BOOL "" FORCE)
-    set(STEVENSSOUND_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
-    set(STEVENSSOUND_BUILD_BENCHMARKS ON CACHE BOOL "" FORCE)
-
-    if(STEVENSSOUND_BUILD_TESTS)
-        add_subdirectory(tests)
-    endif()
-
-    if(STEVENSSOUND_BUILD_EXAMPLES)
-        add_subdirectory(examples)
-    endif()
-
-    if(STEVENSSOUND_BUILD_BENCHMARKS)
-        add_subdirectory(benchmarks)
-    endif()
 endif()
