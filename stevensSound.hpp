@@ -295,7 +295,7 @@ namespace stevensSound
 
 	/**
 	 * @brief Store a sound from the sounds map in persistent memory storage to avoid reloading the sound.
-	 * 
+	 *
 	 * @param cateogry The category the soudn is stored under in the sounds map
 	 * @param soundName THe identifying name of the sound
 	 */
@@ -326,8 +326,41 @@ namespace stevensSound
 
 
 	/**
+	 * @brief Store a Mix_Chunk directly in persistent memory with a custom name.
+	 *
+	 * This overload is useful for storing pitch-shifted or otherwise modified audio chunks.
+	 *
+	 * @param category The category to store the sound under
+	 * @param soundName The identifying name for this sound variant
+	 * @param chunk The Mix_Chunk to store (ownership is transferred to persistentChunks)
+	 */
+	inline 	void storePersistentSound(	const std::string & category,
+								const std::string & soundName,
+								Mix_Chunk* chunk	)
+	{
+		if (!chunk)
+		{
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Cannot store null chunk for category \"" + category + "\" and name \"" + soundName + "\"",
+				"storePersistentSound");
+			return;
+		}
+
+		//Is the sound already stored persistently in persistentChunks?
+		if( stevensSound::isPersistentlyStored( category, soundName ) )
+		{
+			//If so, free the chunk already stored there and continue
+			Mix_FreeChunk( stevensSound::persistentChunks.at( category + "/" + soundName ) );
+		}
+
+		//Store the chunk pointer
+		stevensSound::persistentChunks[ category + "/" + soundName ] = chunk;
+	}
+
+
+	/**
 	 * @brief Free a sound from the persistentChunks map from memory.
-	 * 
+	 *
 	 * @param cateogry The category the soudn is stored under in the sounds map
 	 * @param soundName THe identifying name of the sound
 	 */
@@ -341,7 +374,7 @@ namespace stevensSound
 				"Sound with category \"" + category + "\" and name \"" + soundName + "\" is not persistently stored",
 				"freePersistentSound");
 			return;
-		}	
+		}
 
 		//Otherwise, free the sound from memory
 		Mix_FreeChunk( stevensSound::persistentChunks.at( category + "/" + soundName ) );

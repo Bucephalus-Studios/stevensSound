@@ -5,7 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Include FetchContent for dependency management
 include(FetchContent)
+
+# Check if stevensSound target already exists (included from root CMakeLists.txt)
+if(NOT TARGET stevensSound)
+    message(STATUS "stevensSound target not found - setting up dependencies for standalone build")
 
 # Disable building unnecessary SDL2 components
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -49,7 +54,20 @@ set(SDL2MIXER_FLAC ON CACHE BOOL "" FORCE)
 set(SDL2MIXER_OPUS OFF CACHE BOOL "" FORCE)
 set(SDL2MIXER_MOD OFF CACHE BOOL "" FORCE)
 set(SDL2MIXER_MIDI OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL2_mixer)
+
+# Fetch SoundTouch library for pitch shifting
+message(STATUS "Fetching SoundTouch library...")
+FetchContent_Declare(
+    SoundTouch
+    GIT_REPOSITORY https://gitlab.com/soundtouch/soundtouch.git
+    GIT_TAG 2.3.1
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+)
+set(SOUNDTOUCH_DLL OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(SoundTouch)
 
 # Create interface library for stevensSound (header-only)
 add_library(stevensSound INTERFACE)
@@ -64,6 +82,15 @@ else()
     message(FATAL_ERROR "SDL2_mixer target not found")
 endif()
 
+# Link SoundTouch
+if(TARGET SoundTouch)
+    target_link_libraries(stevensSound INTERFACE SoundTouch)
+elseif(TARGET SoundTouch::SoundTouch)
+    target_link_libraries(stevensSound INTERFACE SoundTouch::SoundTouch)
+else()
+    message(FATAL_ERROR "SoundTouch target not found")
+endif()
+
 target_compile_features(stevensSound INTERFACE cxx_std_20)
 
 # Add thread support
@@ -73,6 +100,9 @@ target_link_libraries(stevensSound INTERFACE Threads::Threads)
 # Platform-specific libraries
 if(UNIX AND NOT APPLE)
     target_link_libraries(stevensSound INTERFACE dl)
+endif()
+else()
+    message(STATUS "Using existing stevensSound target from parent")
 endif()
 
 # Fetch Google Benchmark

@@ -1,16 +1,11 @@
 cmake_minimum_required(VERSION 3.14)
-project(stevensSound_examples)
+project(stevensSound VERSION 1.0.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Include FetchContent for dependency management
 include(FetchContent)
-
-# Check if stevensSound target already exists (included from root CMakeLists.txt)
-if(NOT TARGET stevensSound)
-    message(STATUS "stevensSound target not found - setting up dependencies for standalone build")
 
 # Disable building unnecessary SDL2 components
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -69,9 +64,26 @@ FetchContent_Declare(
 set(SOUNDTOUCH_DLL OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SoundTouch)
 
+# Create a wrapper include directory with SDL2 subdirectory
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sdl_includes/SDL2)
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${SDL2_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}/sdl_includes/SDL2
+)
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${SDL2_mixer_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}/sdl_includes/SDL2
+)
+
 # Create interface library for stevensSound (header-only)
 add_library(stevensSound INTERFACE)
-target_include_directories(stevensSound INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(stevensSound INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/sdl_includes>
+)
 
 # Link SDL2 and SDL2_mixer
 if(TARGET SDL2_mixer)
@@ -101,33 +113,27 @@ target_link_libraries(stevensSound INTERFACE Threads::Threads)
 if(UNIX AND NOT APPLE)
     target_link_libraries(stevensSound INTERFACE dl)
 endif()
+
+# If this is the main project (not included via add_subdirectory), build tests by default
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    message(STATUS "stevensSound: Building as standalone project - tests, examples, and benchmarks enabled")
+    option(STEVENSSOUND_BUILD_TESTS "Build tests" ON)
+    option(STEVENSSOUND_BUILD_EXAMPLES "Build examples" ON)
+    option(STEVENSSOUND_BUILD_BENCHMARKS "Build benchmarks" ON)
 else()
-    message(STATUS "Using existing stevensSound target from parent")
+    option(STEVENSSOUND_BUILD_TESTS "Build tests" OFF)
+    option(STEVENSSOUND_BUILD_EXAMPLES "Build examples" OFF)
+    option(STEVENSSOUND_BUILD_BENCHMARKS "Build benchmarks" OFF)
 endif()
 
-# Basic example
-add_executable(basic basic_example.cpp)
-target_link_libraries(basic PRIVATE stevensSound)
+if(STEVENSSOUND_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
 
-# Playlist example
-add_executable(playlist playlist_example.cpp)
-target_link_libraries(playlist PRIVATE stevensSound)
+if(STEVENSSOUND_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
-# Error handling example
-add_executable(error_handling error_handling_example.cpp)
-target_link_libraries(error_handling PRIVATE stevensSound)
-
-# RAII example
-add_executable(raii raii_example.cpp)
-target_link_libraries(raii PRIVATE stevensSound)
-
-# Pitch modulation example
-add_executable(pitch_modulation pitch_modulation_example.cpp)
-target_link_libraries(pitch_modulation PRIVATE stevensSound)
-
-# Copy example assets to build directory
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/assets)
-    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets
-        DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-    )
+if(STEVENSSOUND_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()

@@ -2,7 +2,30 @@
 
 Get up and running with stevensSound in 5 minutes!
 
-## Step 1: Build the Library
+## Step 1: Integration (Recommended)
+
+The easiest way to use stevensSound is via CMake's `add_subdirectory`:
+
+### In your CMakeLists.txt:
+
+```cmake
+# Add stevensSound to your project
+add_subdirectory(path/to/stevensSound)
+
+# Link it to your executable
+target_link_libraries(your_app PRIVATE stevensSound)
+```
+
+**That's it!** CMake automatically downloads and links:
+- SDL2 (v2.0.22)
+- SDL2_mixer (v2.6.3)
+- SoundTouch (v2.3.1) - for pitch shifting
+
+No manual dependency installation required!
+
+## Step 2: Standalone Build (Optional)
+
+To build tests, examples, and benchmarks:
 
 ```bash
 git clone <repository-url>
@@ -12,28 +35,7 @@ cmake ..
 cmake --build .
 ```
 
-That's it! CMake automatically downloads and builds SDL2 and SDL2_mixer for you.
-
-## Step 2: Basic Integration
-
-### Option A: CMake Integration
-
-Add to your `CMakeLists.txt`:
-
-```cmake
-add_subdirectory(stevensSound)
-target_link_libraries(your_app PRIVATE stevensSound)
-```
-
-### Option B: Header-Only
-
-Just include the main header:
-
-```cpp
-#include "stevensSound.hpp"
-```
-
-Make sure to link SDL2 and SDL2_mixer.
+Tests, examples, and benchmarks are automatically built when stevensSound is the main project.
 
 ## Step 3: Your First Sound
 
@@ -66,20 +68,29 @@ int main()
 
 ## Common Use Cases
 
-### UI Sounds with Anti-Fatigue
+### Pitch Shifting for Anti-Fatigue
 
-Prevent annoying repetition in UI sounds:
+Create pitch-shifted variants to prevent listener fatigue from repetitive UI sounds:
 
 ```cpp
-// Set up once
-stevensSound::setupAntiFatigueSound("sfx", "button_click", 0.1f);
+// Load the original sound
+Mix_Chunk* original = Mix_LoadWAV("assets/sfx/select.wav");
 
-// Play multiple times - each will sound slightly different
-for (int i = 0; i < 10; i++)
+// Create pitch variants (95% to 105% pitch)
+for (float pitch = 0.95f; pitch <= 1.05f; pitch += 0.01f)
 {
-    stevensSound::playSound("sfx", "button_click");
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    Mix_Chunk* variant = stevensSound::applyPitchShift(original, pitch);
+
+    std::string name = "select_" + std::to_string((int)(pitch * 100));
+    stevensSound::storePersistentSound("sfx", name, variant);
 }
+
+Mix_FreeChunk(original);
+
+// Later: play random variants during gameplay
+int randomPitch = 95 + (rand() % 11);  // 95-105
+std::string variantName = "select_" + std::to_string(randomPitch);
+stevensSound::playPersistentSound("sfx", variantName);
 ```
 
 ### Background Music

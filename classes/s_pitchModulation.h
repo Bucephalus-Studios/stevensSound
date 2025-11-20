@@ -1,20 +1,14 @@
 /**
  * @file s_pitchModulation.h
  * @brief Pitch modulation and audio effects for stevensSound library
- * @version 1.0
- * @date 2025-11-14
+ * @version 2.0
+ * @date 2025-11-20
  *
- * IMPORTANT NOTE:
- * SDL_mixer does not natively support pitch shifting without tempo changes.
  * This implementation provides:
- * 1. Volume-based pseudo-pitch variation (volume modulation)
- * 2. Panning effects
- * 3. Framework for future integration with libraries like SoLoud or libsoundtouch
- *
- * For true pitch shifting without tempo changes, consider:
- * - SoLoud library (https://solhsa.com/soloud/)
- * - libsoundtouch (https://www.surina.net/soundtouch/)
- * - PortAudio with custom DSP
+ * 1. True pitch shifting without tempo changes using libsoundtouch
+ * 2. Volume-based modulation
+ * 3. Panning effects
+ * 4. Utility functions for creating pitch-shifted sound variants
  */
 
 #ifndef STEVENSSOUND_PITCH_MODULATION_H
@@ -24,6 +18,16 @@
 #include <string>
 #include <cmath>
 #include <random>
+#include <vector>
+#include <memory>
+#include <cstring>
+#include <SoundTouch.h>
+
+#if defined(__linux__)
+    #include <SDL2/SDL_mixer.h>
+#elif defined(_WIN32)
+    #include <SDL2/SDL_mixer.h>
+#endif
 
 namespace stevensSound
 {
@@ -234,6 +238,92 @@ namespace stevensSound
     inline std::unordered_map<std::string, AudioEffects> AudioEffectsManager::effectsMap;
     inline std::mt19937 AudioEffectsManager::randomGenerator(std::random_device{}());
     inline std::uniform_real_distribution<float> AudioEffectsManager::distribution(0.0f, 1.0f);
+
+    /**
+     * @brief Apply pitch shifting to an audio chunk without changing tempo
+     *
+     * Uses libsoundtouch to perform high-quality pitch shifting. Creates a new
+     * Mix_Chunk with the pitch-shifted audio data. The original chunk is not modified.
+     *
+     * @param original The original Mix_Chunk to pitch shift
+     * @param pitchMultiplier The pitch multiplier (0.95 = 95% pitch, 1.05 = 105% pitch)
+     * @return A new heap-allocated Mix_Chunk with pitch-shifted audio, or nullptr on failure
+     *
+     * @note The caller is responsible for freeing the returned Mix_Chunk
+     * @note This function is thread-safe
+     * @note Assumes stereo audio at 44.1kHz sample rate
+     */
+    inline Mix_Chunk* applyPitchShift(Mix_Chunk* original, float pitchMultiplier)
+    {
+        if (!original || !original->abuf || original->alen == 0)
+        {
+            return nullptr;
+        }
+
+        // Assume 16-bit stereo audio at 44.1kHz (SDL_mixer default)
+        const int SAMPLE_RATE = 44100;
+        const int CHANNELS = 2;
+        const int BYTES_PER_SAMPLE = 2; // 16-bit = 2 bytes
+
+        // Calculate number of samples (each sample is 2 channels * 2 bytes = 4 bytes)
+        int numSamples = original->alen / (CHANNELS * BYTES_PER_SAMPLE);
+
+        // Create SoundTouch processor
+        soundtouch::SoundTouch soundTouch;
+        soundTouch.setSampleRate(SAMPLE_RATE);
+        soundTouch.setChannels(CHANNELS);
+
+        // Set pitch without changing tempo
+        // pitchMultiplier of 1.05 = 5% higher pitch
+        soundTouch.setPitchSemiTones(12.0f * std::log2(pitchMultiplier));
+
+        // Convert SDL's 16-bit interleaved format to float samples for SoundTouch
+        std::vector<float> inputSamples(numSamples * CHANNELS);
+        Sint16* sdlSamples = reinterpret_cast<Sint16*>(original->abuf);
+
+        for (int i = 0; i < numSamples * CHANNELS; i++)
+        {
+            inputSamples[i] = static_cast<float>(sdlSamples[i]) / 32768.0f;
+        }
+
+        // Process the audio
+        soundTouch.putSamples(inputSamples.data(), numSamples);
+        soundTouch.flush();
+
+        // Get the output samples
+        int availableSamples = soundTouch.numSamples();
+        std::vector<float> outputSamples(availableSamples * CHANNELS);
+
+        int receivedSamples = soundTouch.receiveSamples(outputSamples.data(), availableSamples);
+
+        if (receivedSamples == 0)
+        {
+            return nullptr;
+        }
+
+        // Convert float samples back to 16-bit format
+        int outputBytes = receivedSamples * CHANNELS * BYTES_PER_SAMPLE;
+        Uint8* outputBuffer = new Uint8[outputBytes];
+        Sint16* outputSamples16 = reinterpret_cast<Sint16*>(outputBuffer);
+
+        for (int i = 0; i < receivedSamples * CHANNELS; i++)
+        {
+            // Clamp and convert to 16-bit
+            float sample = outputSamples[i] * 32768.0f;
+            if (sample > 32767.0f) sample = 32767.0f;
+            if (sample < -32768.0f) sample = -32768.0f;
+            outputSamples16[i] = static_cast<Sint16>(sample);
+        }
+
+        // Create a new Mix_Chunk
+        Mix_Chunk* result = new Mix_Chunk;
+        result->allocated = 1; // We allocated the memory
+        result->abuf = outputBuffer;
+        result->alen = outputBytes;
+        result->volume = original->volume;
+
+        return result;
+    }
 
     /**
      * @brief Helper function to set up anti-fatigue sound effects
