@@ -295,7 +295,7 @@ namespace stevensSound
 
 	/**
 	 * @brief Store a sound from the sounds map in persistent memory storage to avoid reloading the sound.
-	 * 
+	 *
 	 * @param cateogry The category the soudn is stored under in the sounds map
 	 * @param soundName THe identifying name of the sound
 	 */
@@ -326,8 +326,115 @@ namespace stevensSound
 
 
 	/**
+	 * @brief Store a Mix_Chunk directly in persistent memory with a custom name.
+	 *
+	 * This overload is useful for storing pitch-shifted or otherwise modified audio chunks.
+	 *
+	 * @param category The category to store the sound under
+	 * @param soundName The identifying name for this sound variant
+	 * @param chunk The Mix_Chunk to store (ownership is transferred to persistentChunks)
+	 */
+	inline 	void storePersistentSound(	const std::string & category,
+								const std::string & soundName,
+								Mix_Chunk* chunk	)
+	{
+		if (!chunk)
+		{
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Cannot store null chunk for category \"" + category + "\" and name \"" + soundName + "\"",
+				"storePersistentSound");
+			return;
+		}
+
+		//Is the sound already stored persistently in persistentChunks?
+		if( stevensSound::isPersistentlyStored( category, soundName ) )
+		{
+			//If so, free the chunk already stored there and continue
+			Mix_FreeChunk( stevensSound::persistentChunks.at( category + "/" + soundName ) );
+		}
+
+		//Store the chunk pointer
+		stevensSound::persistentChunks[ category + "/" + soundName ] = chunk;
+	}
+
+
+	/**
+	 * @brief Load pitch-shifted variants of a sound and store them persistently.
+	 *
+	 * This is a convenience function for creating multiple pitch-shifted versions
+	 * of a sound for anti-fatigue purposes. Each variant is stored with the naming
+	 * pattern "soundName_pitch" where pitch is formatted as an integer percentage
+	 * (e.g., "select1_95" for 0.95 pitch, "select1_105" for 1.05 pitch).
+	 *
+	 * @param category The category of the sound in the sounds map
+	 * @param soundName The name of the original sound
+	 * @param minPitch Minimum pitch multiplier (e.g., 0.95 for 95%)
+	 * @param maxPitch Maximum pitch multiplier (e.g., 1.05 for 105%)
+	 * @param step Step size between variants (e.g., 0.01 for 1% increments)
+	 *
+	 * @note Original sound must exist in the sounds map
+	 * @note All variants are stored in persistentChunks and remain in memory
+	 * @note Thread-safe for concurrent calls with different sound names
+	 */
+	inline void loadPitchVariants(	const std::string& category,
+									const std::string& soundName,
+									float minPitch,
+									float maxPitch,
+									float step	)
+	{
+		// Validate that the original sound exists
+		if (!stevensSound::soundsContains(category, soundName))
+		{
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Cannot load pitch variants: sound with category \"" + category +
+				"\" and name \"" + soundName + "\" does not exist",
+				"loadPitchVariants");
+			return;
+		}
+
+		// Load the original sound
+		Mix_Chunk* original = Mix_LoadWAV(sounds[category][soundName].filePath);
+		if (!original)
+		{
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Failed to load original sound file: " +
+				std::string(sounds[category][soundName].filePath) + " - " + Mix_GetError(),
+				"loadPitchVariants");
+			return;
+		}
+
+		// Generate pitch-shifted variants
+		for (float pitch = minPitch; pitch <= maxPitch + 0.0001f; pitch += step)
+		{
+			// Format pitch as integer percentage (e.g., 0.95 -> "95", 1.05 -> "105")
+			int pitchInt = static_cast<int>(std::round(pitch * 100.0f));
+			std::string variantName = soundName + "_" + std::to_string(pitchInt);
+
+			// Apply pitch shift
+			Mix_Chunk* variant = applyPitchShift(original, pitch);
+
+			if (variant)
+			{
+				// Store the variant persistently
+				storePersistentSound(category, variantName, variant);
+			}
+			else
+			{
+				ErrorHandler::setError(ErrorLevel::WARNING,
+					"Failed to create pitch variant " + variantName +
+					" for sound \"" + category + "/" + soundName + "\"",
+					"loadPitchVariants");
+			}
+		}
+
+		// Free the original chunk (we've processed it)
+		Mix_FreeChunk(original);
+	}
+
+
+	/**
 	 * @brief Free a sound from the persistentChunks map from memory.
-	 * 
+	 *
 	 * @param cateogry The category the soudn is stored under in the sounds map
 	 * @param soundName THe identifying name of the sound
 	 */
@@ -341,7 +448,7 @@ namespace stevensSound
 				"Sound with category \"" + category + "\" and name \"" + soundName + "\" is not persistently stored",
 				"freePersistentSound");
 			return;
-		}	
+		}
 
 		//Otherwise, free the sound from memory
 		Mix_FreeChunk( stevensSound::persistentChunks.at( category + "/" + soundName ) );

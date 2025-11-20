@@ -51,6 +51,18 @@ set(SDL2MIXER_MOD OFF CACHE BOOL "" FORCE)
 set(SDL2MIXER_MIDI OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL2_mixer)
 
+# Fetch SoundTouch library for pitch shifting
+message(STATUS "Fetching SoundTouch library...")
+FetchContent_Declare(
+    SoundTouch
+    GIT_REPOSITORY https://gitlab.com/soundtouch/soundtouch.git
+    GIT_TAG 2.3.1
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+)
+set(SOUNDTOUCH_DLL OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(SoundTouch)
+
 # Create interface library for stevensSound (header-only)
 add_library(stevensSound INTERFACE)
 target_include_directories(stevensSound INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -62,6 +74,15 @@ elseif(TARGET SDL2_mixer::SDL2_mixer-static)
     target_link_libraries(stevensSound INTERFACE SDL2::SDL2-static SDL2_mixer::SDL2_mixer-static)
 else()
     message(FATAL_ERROR "SDL2_mixer target not found")
+endif()
+
+# Link SoundTouch
+if(TARGET SoundTouch)
+    target_link_libraries(stevensSound INTERFACE SoundTouch)
+elseif(TARGET SoundTouch::SoundTouch)
+    target_link_libraries(stevensSound INTERFACE SoundTouch::SoundTouch)
+else()
+    message(FATAL_ERROR "SoundTouch target not found")
 endif()
 
 target_compile_features(stevensSound INTERFACE cxx_std_20)
