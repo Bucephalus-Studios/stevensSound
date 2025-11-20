@@ -5,7 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Include FetchContent for dependency management
 include(FetchContent)
+
+# Check if stevensSound target already exists (included from root CMakeLists.txt)
+if(NOT TARGET stevensSound)
+    message(STATUS "stevensSound target not found - setting up dependencies for standalone build")
 
 # Disable building unnecessary SDL2 components
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -94,6 +99,9 @@ target_link_libraries(stevensSound INTERFACE Threads::Threads)
 # Platform-specific libraries
 if(UNIX AND NOT APPLE)
     target_link_libraries(stevensSound INTERFACE dl)
+endif()
+else()
+    message(STATUS "Using existing stevensSound target from parent")
 endif()
 
 # Fetch Google Benchmark
