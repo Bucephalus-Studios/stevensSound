@@ -1,3 +1,6 @@
+#ifndef STEVENS_SOUND_HPP
+#define STEVENS_SOUND_HPP
+
 /**
  * An easy-to-use C++ library to interface with SDL 2 for playing sounds in applications.
 */
@@ -31,12 +34,9 @@ SDL supports windows and mac, so we may not need platform specific sound for win
 //Custom libraries used here
 // #include "libraries/stevensSetLib.h"
 
-//Include classes for the library
-#include "classes/s_soundData.h"
-#include "classes/s_soundController.h"
-#include "classes/s_soundPlaylist.h"
-#include "classes/s_errorHandler.h"
-#include "classes/s_pitchModulation.h"
+//Include common classes that are used globally
+#include "classes/Mix_ChunkData.h"
+#include "classes/Mix_MusicData.h"
 
 
 /***** Global functions and variables used for managing Mix_Chunk memory *****/
@@ -80,7 +80,7 @@ inline void stevensSound_channelFinishedCallback( const int channel )
 	//Lock other threads for modification of the chunk pool
 	std::lock_guard<std::mutex> lock(stevensSound_chunkMutex);
     if( stevensSound_chunkPool.contains(chunk) )
-	{ 
+	{
 		// Remove from pool if present
 		stevensSound_chunkPool.erase(chunk);
         Mix_FreeChunk(chunk);
@@ -92,21 +92,51 @@ inline void stevensSound_channelFinishedCallback( const int channel )
 /**************************************************************************/
 
 
+/**
+ * STEVENSOUND RESOURCE OWNERSHIP AND LIFECYCLE MODEL
+ *
+ * MEMORY MANAGEMENT:
+ * - All SDL resources (Mix_Music*, Mix_Chunk*) are loaded ONCE at startup via loadAllMusic()/loadAllSounds()
+ * - Resources are stored in global caches ('music' and 'sounds' maps) and persist for the entire program lifetime
+ * - Playback functions (playMusicPlaylist, playSound) REFERENCE cached resources but DO NOT own them
+ * - Resources are ONLY freed during program shutdown in cleanUp()
+ *
+ * THREADING MODEL:
+ * - Main thread: Loads resources, switches playlists, handles user input
+ * - Music thread: Runs playMusicPlaylist() in background, plays music continuously
+ * - Sound threads: Detached threads for sound effect playback
+ * - Synchronization: audioChange flag with busy-wait (TODO: upgrade to condition variables)
+ *
+ * CRITICAL RULES:
+ * - NEVER call Mix_FreeMusic() or Mix_FreeChunk() outside of cleanUp()
+ * - NEVER modify the 'music' or 'sounds' maps after loading (read-only after init)
+ * - ALWAYS validate resources with isValidMusic()/isValidSound() before playback
+ * - When switching playlists, use Mix_HaltMusic() to stop playback (NOT Mix_FreeMusic)
+ */
 namespace stevensSound
 {
+	//Include classes for the library (inside namespace)
+	// NOTE: ErrorHandler must be included FIRST because Sound and Music use it in isValid()
+	#include "classes/ErrorHandler.hpp"
+	#include "classes/Sound.hpp"
+	#include "classes/Music.hpp"
+	#include "classes/PlaybackController.hpp"
+	#include "classes/SoundPlaylist.hpp"
+	// NOTE: Pitch modulation feature is untested and still a stub implementation
+	// It requires the SoundTouch library which is not currently installed
+	// #include "classes/s_pitchModulation.h"
+
 	/*** Variables ***/
-	inline std::unordered_map<std::string, std::unordered_map<std::string, s_soundData> > sounds; //Container of all sounds
-	inline std::unordered_map<std::string, s_soundPlaylist> playlists; //Contains all of the playlists created with the stevensSound library
-	inline std::unordered_map<std::string, s_soundController> soundControllers; //Container of all sound controllers. Controls volume and playback settings for sounds.
-	inline std::unordered_map<std::string, Mix_Chunk*> persistentChunks; //A map containing the addresses of Mix_Chunks we want to keep stored in memory.
-																  //The benefit of this is we don't have to load these sounds into memory and free them
-																  //on each use.
+	inline std::unordered_map<std::string, std::unordered_map<std::string, Sound> > sounds; //Container of all sounds (Mix_Chunks stored in Sound objects) - OWNED by stevensSound, freed in cleanUp()
+	inline std::unordered_map<std::string, std::unordered_map<std::string, Music> > music; //Container of all music (Mix_Music stored in Music objects) - OWNED by stevensSound, freed in cleanUp()
+	inline std::unordered_map<std::string, SoundPlaylist> playlists; //Contains all of the playlists created with the stevensSound library
+	inline std::unordered_map<std::string, PlaybackController> soundControllers; //Container of all playback controllers. Controls volume and playback settings for sounds.
 	inline bool audioChange; //Bool used to control when currently audio playback is modified in any way
 
 
 	/*** Methods ***/
 	/**
-	 * @brief Returns a string containing the version information of SDL and SDL_mixer.
+	 * @brief Returns a std::string containing the version information of SDL and SDL_mixer.
 	 */
 	inline 	std::string getSDLVersionInfo()
 	{
@@ -124,54 +154,140 @@ namespace stevensSound
 
 
 	/**
+	 * @brief Factory function to create a Sound object and load its Mix_Chunks into memory
+	 *
+	 * @param name The name of the sound
+	 * @param type The type/category of the sound (e.g., "sfx", "music")
+	 * @param controllerId The ID of the sound controller
+	 * @param filePath Path to the main sound file
+	 * @param variantFilePaths Optional vector of paths to pitch-shifted variants
+	 * @return Sound object with loaded Mix_Chunks
+	 */
+	inline Sound createSound(	std::string name,
+								std::string type,
+								std::string controllerId,
+								const char* filePath,
+								std::vector<const char*> variantFilePaths = {}	)
+	{
+		Sound data(name, type, controllerId);
+
+		//Load main chunk
+		data.mainChunkData = Mix_ChunkData(filePath);
+		if( !data.mainChunkData.load() )
+		{
+			std::cerr << "CRITICAL: Failed to load main sound chunk for '" << name << "'" << std::endl;
+		}
+
+		//Load variant chunks if provided (skip any that fail to load)
+		for(const char* variantPath : variantFilePaths)
+		{
+			Mix_ChunkData variantData(variantPath);
+			if( variantData.load() )
+			{
+				data.variantChunkData.push_back(variantData);
+			}
+			//Note: load() already prints error message on failure
+		}
+
+		return data;
+	}
+
+
+	/**
+	 * @brief Factory function to create a Music object and load its Mix_Music handle into memory
+	 *
+	 * @param name The name of the music track
+	 * @param type The type/category of the music (e.g., "music", "battle music")
+	 * @param controllerId The ID of the sound controller
+	 * @param filePath Path to the music file
+	 * @return Music object with loaded Mix_Music
+	 */
+	inline Music createMusic(	std::string name,
+								std::string type,
+								std::string controllerId,
+								const char* filePath	)
+	{
+		Music data(name, type, controllerId);
+
+		//Load music handle
+		data.musicData = Mix_MusicData(filePath);
+		if( !data.musicData.load() )
+		{
+			std::cerr << "CRITICAL: Failed to load music for '" << name << "'" << std::endl;
+		}
+
+		return data;
+	}
+
+
+	/**
 	 * @brief Given an unordered_map with key-value pairs of sound names and file paths to the sounds respectively and 
-	 * a type of sound, return an unordered_map with key value pairs of sound names and s_soundData objects
+	 * a type of sound, return an unordered_map with key value pairs of sound names and Sound objects
 	 * containing data about the sounds. 
 	 * 
 	 * Parameters:
 	 *  unordered_map<std::string, const char *> soundNamesnPaths - A map of key-value pairs of sound names and their
 	 *                                                              file paths relative to the executable file location
 	 *                                                              respectively.
-	 *  std::string soundType - The type of sound to assign to all of the newly constructed s_soundData objects.
+	 *  std::string soundType - The type of sound to assign to all of the newly constructed Sound objects.
 	 * 	std::string controllerId - Id of the controller to which to assign each of the newly loaded sounds to.
 	 * 
 	 * Returns:
-	 *  unordered_map<std::string, s_soundData> - A map of sound objects where the key-value pairs are of the sound name
+	 *  unordered_map<std::string, Sound> - A map of sound objects where the key-value pairs are of the sound name
 	 *                                            and the data object containing all necessary information about the 
 	 *                                            sound needed for it to be used in this library respectively.
 	 *  
 	*/
-	inline 	std::unordered_map<std::string, s_soundData> loadSoundData(	std::unordered_map<std::string, const char *> soundNamesnPaths,
+	inline 	std::unordered_map<std::string, Sound> loadSoundData(	std::unordered_map<std::string, const char *> soundNamesnPaths,
 																std::string soundType,
 																std::string controllerId  )
 	{
-		std::unordered_map<std::string, s_soundData> soundDataMap = {};
-		s_soundData soundData;
+		std::unordered_map<std::string, Sound> soundDataMap = {};
+		Sound soundData;
 
 		//Iterate through all of the sound names and paths
 		for(auto & [soundName,path] : soundNamesnPaths)
 		{
-			//Convert each key-value pair into an s_soundData object that is an entry of soundDataMap
-			soundData = s_soundData(soundName, path, soundType, controllerId);
-			soundDataMap[soundName] = soundData;
-		}
-		//Load the sound files in memory to test if they're able to load
-		std::unordered_map<std::string, s_soundData>::iterator it;
-		for (it = soundDataMap.begin(); it != soundDataMap.end(); it++)
-		{
-			Mix_Chunk * chunk = Mix_LoadWAV(it->second.filePath);
-			if( chunk == NULL)
-			{
-				//Print an error to cerr if we're unable to load a certain file
-				std::cerr << soundType + " " << it->second.name << " was unable to load!" << Mix_GetError() << std::endl;
-			}
-			else
-			{
-				Mix_FreeChunk(chunk);
-			}
+			//Use factory function to create and load the sound
+			soundDataMap[soundName] = createSound(soundName, soundType, controllerId, path);
 		}
 
 		return soundDataMap;
+	}
+
+
+	/**
+	 * @brief Given an unordered_map with key-value pairs of music names and file paths to the music respectively and
+	 * a type of music, return an unordered_map with key value pairs of music names and Music objects
+	 * containing data about the music.
+	 *
+	 * Parameters:
+	 *  unordered_map<std::string, const char *> musicNamesnPaths - A map of key-value pairs of music names and their
+	 *                                                              file paths relative to the executable file location
+	 *                                                              respectively.
+	 *  std::string musicType - The type of music to assign to all of the newly constructed Music objects.
+	 * 	std::string controllerId - Id of the controller to which to assign each of the newly loaded music tracks to.
+	 *
+	 * Returns:
+	 *  unordered_map<std::string, Music> - A map of music objects where the key-value pairs are of the music name
+	 *                                            and the data object containing all necessary information about the
+	 *                                            music needed for it to be used in this library respectively.
+	 *
+	*/
+	inline 	std::unordered_map<std::string, Music> loadMusicData(	std::unordered_map<std::string, const char *> musicNamesnPaths,
+															std::string musicType,
+															std::string controllerId  )
+	{
+		std::unordered_map<std::string, Music> musicDataMap = {};
+
+		//Iterate through all of the music names and paths
+		for(auto & [musicName,path] : musicNamesnPaths)
+		{
+			//Use factory function to create and load the music
+			musicDataMap[musicName] = createMusic(musicName, musicType, controllerId, path);
+		}
+
+		return musicDataMap;
 	}
 
 
@@ -190,19 +306,30 @@ namespace stevensSound
 	 */
 	inline 	bool init(	std::unordered_map<std::string, std::unordered_map<std::string, const char *> > soundsParam    )
 	{
-		//Create music, sfx, and default sound controllers
-		soundControllers = {	{"music",	s_soundController("music",1)},
-								{"sfx",		s_soundController("sfx",1)},
-								{"default",	s_soundController()}		};
+		//Create music, sfx, and default playback controllers
+		soundControllers = {	{"music",	PlaybackController("music",1)},
+								{"sfx",		PlaybackController("sfx",1)},
+								{"default",	PlaybackController()}		};
 
-		//Initialize each type of sound we passed in as a parameter
+		//Initialize sounds and music separately
 		sounds = {};
+		music = {};
 		for(auto & [soundType, soundMap] : soundsParam)
 		{
-			sounds[soundType] = loadSoundData(soundMap, soundType, soundType);
+			//Check if this is music or SFX
+			if( soundType.find("music") != std::string::npos )
+			{
+				//Load as music (uses Mix_Music)
+				music[soundType] = loadMusicData(soundMap, soundType, soundType);
+			}
+			else
+			{
+				//Load as sound effect (uses Mix_Chunk)
+				sounds[soundType] = loadSoundData(soundMap, soundType, soundType);
+			}
 		}
 
-		stevensSound::audioChange = false;
+		audioChange = false;
 
 		int channels = Mix_AllocateChannels(16);
 		if (channels != 16)
@@ -213,7 +340,7 @@ namespace stevensSound
 		}
 
 		//Initialize our playlists container to be empty other than having an empty "currently playing" playlist
-		playlists.emplace( "currently playing", s_soundPlaylist() );
+		playlists.emplace( "currently playing", SoundPlaylist() );
 
 		ErrorHandler::setError(ErrorLevel::INFO, "stevensSound initialized successfully", "init");
 		return true;
@@ -247,34 +374,20 @@ namespace stevensSound
 
 
 	/**
-	 * @brief Used to free all of the persistent chunks stored in memory during shutdown of stevensSound library and SDL Mixer.
+	 * @brief Used to free all of the chunks stored in memory during shutdown of stevensSound library and SDL Mixer.
 	 */
-	inline 	void freePersistentChunks()
+	inline 	void freeMixChunks()
 	{
 		std::lock_guard<std::mutex> lock(stevensSound_chunkMutex);
 
-		//Free all chunks in the persistentChunks map
-		for( const auto & [id, chunkPtr] : stevensSound::persistentChunks )
+		//Free all chunks stored in sound data objects
+		for( auto & [category, soundMap] : sounds )
 		{
-			Mix_FreeChunk(chunkPtr);
+			for( auto & [soundName, soundData] : soundMap )
+			{
+				soundData.freeAllChunks();
+			}
 		}
-
-		//Clear the map
-		stevensSound::persistentChunks.clear();
-	}
-
-
-	/**
-	 * @brief Returns true if a sound is found to be persistently stored within the persistentChunks map and 
-	 * 		  false otherwise.
-	 * 
-	 * @param category The category the sound is stored under in the sounds map
-	 * @param soundName The identifying name of the sound
-	 */
-	inline 	bool isPersistentlyStored(	const std::string & category,
-								const std::string & soundName	)
-	{
-		return stevensSound::persistentChunks.contains( category + "/" + soundName );
 	}
 
 
@@ -285,119 +398,50 @@ namespace stevensSound
 	inline 	bool soundsContains(	const std::string & category,
 							const std::string & soundName	)
 	{
-		if( stevensSound::sounds.contains( category ) ) 
+		if( sounds.contains( category ) )
 		{
-			return stevensSound::sounds.at( category ).contains( soundName );
+			return sounds.at( category ).contains( soundName );
 		}
 		return false;
 	}
 
 
 	/**
-	 * @brief Store a sound from the sounds map in persistent memory storage to avoid reloading the sound.
-	 *
-	 * @param cateogry The category the soudn is stored under in the sounds map
-	 * @param soundName THe identifying name of the sound
-	 */
-	inline 	void storePersistentSound(	const std::string & category,
-								const std::string & soundName	)
-	{
-		//Check to see if the sound exists in sounds
-		if( !stevensSound::soundsContains( category, soundName ) )
-		{
-			ErrorHandler::setError(ErrorLevel::ERROR,
-				"Could not find sound with category \"" + category + "\" and name \"" + soundName + "\"",
-				"storePersistentSound");
-			return;
-		}
-		//Is the sound already stored persistently in persistentChunks?
-		if( stevensSound::isPersistentlyStored( category, soundName ) )
-		{
-			//If so, free the chunk already stored there and continue
-			Mix_FreeChunk( stevensSound::persistentChunks.at( category + "/" + soundName ) );
-		}
-
-		//Load the sound into memory
-		Mix_Chunk* sound = Mix_LoadWAV(sounds[category][soundName].filePath);
-
-		//Create an entry for the sound as "{category}/{soundName}" and set the value equal to the chunk pointer
-		stevensSound::persistentChunks[ category + "/" + soundName ] = sound;
-	}
-
-
-	/**
-	 * @brief Store a Mix_Chunk directly in persistent memory with a custom name.
-	 *
-	 * This overload is useful for storing pitch-shifted or otherwise modified audio chunks.
-	 *
-	 * @param category The category to store the sound under
-	 * @param soundName The identifying name for this sound variant
-	 * @param chunk The Mix_Chunk to store (ownership is transferred to persistentChunks)
-	 */
-	inline 	void storePersistentSound(	const std::string & category,
-								const std::string & soundName,
-								Mix_Chunk* chunk	)
-	{
-		if (!chunk)
-		{
-			ErrorHandler::setError(ErrorLevel::ERROR,
-				"Cannot store null chunk for category \"" + category + "\" and name \"" + soundName + "\"",
-				"storePersistentSound");
-			return;
-		}
-
-		//Is the sound already stored persistently in persistentChunks?
-		if( stevensSound::isPersistentlyStored( category, soundName ) )
-		{
-			//If so, free the chunk already stored there and continue
-			Mix_FreeChunk( stevensSound::persistentChunks.at( category + "/" + soundName ) );
-		}
-
-		//Store the chunk pointer
-		stevensSound::persistentChunks[ category + "/" + soundName ] = chunk;
-	}
-
-
-	/**
-	 * @brief Free a sound from the persistentChunks map from memory.
-	 *
-	 * @param cateogry The category the soudn is stored under in the sounds map
-	 * @param soundName THe identifying name of the sound
-	 */
-	inline 	void freePersistentSound(	const std::string & category,
-								const std::string & soundName	)
-	{
-		//Is the sound stored persistently in persistentChunks?
-		if( !stevensSound::isPersistentlyStored( category, soundName ) )
-		{
-			ErrorHandler::setError(ErrorLevel::ERROR,
-				"Sound with category \"" + category + "\" and name \"" + soundName + "\" is not persistently stored",
-				"freePersistentSound");
-			return;
-		}
-
-		//Otherwise, free the sound from memory
-		Mix_FreeChunk( stevensSound::persistentChunks.at( category + "/" + soundName ) );
-
-		//Erase the entry for the soudn in persistentChunks
-		stevensSound::persistentChunks.erase( category + "/" + soundName );
-	}
-
-
-	/**
-	 * @brief Play a sound that exists in persistent memory which is tracked in the persistentChunks map
+	 * Given the name of a sound and the category under which it is stored, play the sound with SDL Mixer on a free audio channel.
 	 * 
-	 * @param category The category in the sounds map that the sound is stored under
-	 * @param soundName The identifying name of the sound
-	 */
-	inline 	void playPersistentSound(	const std::string & category,
-								const std::string & soundName,
-								const std::string & whenChannelsBusy = "return"	)
+	 * Parameters:
+	 * 	std::string soundName - The string name of a sound under a category in the stevensSound object's sound map that you wish to play.
+	 * 	std::string category - The string category name of a sound within the stevenSound object's sound map that you wish to play.
+	 * 	@param stealChannel If true, if all mix channels are taken by currently playing sounds, steal the channel from a playing sound
+	 * 						to play this sound. If false, wait until a channel is open to play this sound.
+	 * 
+	 * Returns:
+	 * 	void, but plays sounds
+	*/
+	inline 	void playSound(	const std::string & category,
+					const std::string & soundName,
+					const std::string & whenChannelsBusy = "return"	)
 	{
-		//stevensFileLib::appendToFile("errorLog.txt", "playing persistent sound!\n");
+		//Check: Is the category and soundName combo valid?
+		if( !soundsContains( category, soundName ) )
+		{
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Requested to play sound with category \"" + category + "\" and name \"" + soundName + "\", but it does not exist",
+				"playSound");
+			return;
+		}
 
-		//Get the persistently stored chunk
-		Mix_Chunk* sound = persistentChunks.at( category + "/" + soundName );
+		//Get a random chunk to play (handles anti-fatigue variant selection)
+		Mix_Chunk* sound = sounds[category][soundName].getChunkToPlay();
+
+		//Check if the chunk is actually loaded
+		if( sound == nullptr )
+		{
+			ErrorHandler::setError(ErrorLevel::ERROR,
+				"Sound \"" + category + "/" + soundName + "\" exists but is not loaded in memory",
+				"playSound");
+			return;
+		}
 
 		//Control the playback
 		Mix_VolumeChunk(sound, (int)std::round(128 * soundControllers[sounds[category][soundName].controllerId].volume));
@@ -429,138 +473,11 @@ namespace stevensSound
 	}
 
 
-	/**
-	 * Given the name of a sound and the category under which it is stored, play the sound with SDL Mixer on a free audio channel.
-	 * 
-	 * Parameters:
-	 * 	std::string soundName - The string name of a sound under a category in the stevensSound object's sound map that you wish to play.
-	 * 	std::string category - The string category name of a sound within the stevenSound object's sound map that you wish to play.
-	 * 	@param stealChannel If true, if all mix channels are taken by currently playing sounds, steal the channel from a playing sound
-	 * 						to play this sound. If false, wait until a channel is open to play this sound.
-	 * 
-	 * Returns:
-	 * 	void, but plays sounds
-	*/
-	inline 	void playSound(	const std::string & category,
-					const std::string & soundName,
-					const std::string & whenChannelsBusy = "return"	)
-	{
-		//Check: Is the category and soundName combo a persistently loaded sound?
-		if( stevensSound::isPersistentlyStored( category, soundName ) )
-		{
-			//If so, play the preloaded sound
-			stevensSound::playPersistentSound( category, soundName, whenChannelsBusy );
-			return;
-		}
-		//Also check: is the category and soundName combo an existing sound in the 2D sounds map?
-		else if( !stevensSound::soundsContains( category, soundName ) )
-		{
-			ErrorHandler::setError(ErrorLevel::ERROR,
-				"Requested to play sound with category \"" + category + "\" and name \"" + soundName + "\", but it does not exist",
-				"playSound");
-			return;
-		}
-
-		//Load the sound file into memory
-		Mix_Chunk* sound = Mix_LoadWAV(sounds[category][soundName].filePath);
-		//If the sound doesn't load, return
-		if( !sound )
-		{
-			ErrorHandler::setError(ErrorLevel::ERROR,
-				"Failed to load sound file: " + std::string(sounds[category][soundName].filePath) + " - " + Mix_GetError(),
-				"playSound");
-			return;
-		}
-
-		// Add to pool before playing (avoid race condition)
-		{
-			std::lock_guard<std::mutex> lock(stevensSound_chunkMutex);
-			stevensSound_chunkPool.insert(sound);
-		}
-
-		// Get audio effects for this sound
-		AudioEffects effects = AudioEffectsManager::getEffects(category, soundName);
-
-		// Apply random pitch variation if enabled
-		if (effects.randomizePitch)
-		{
-			float randomVar = AudioEffectsManager::getRandomPitchVariation(effects.randomRange);
-			effects.pitchVariation += randomVar;
-		}
-
-		//Control the playback with effects
-		float baseVolume = soundControllers[sounds[category][soundName].controllerId].volume;
-		float effectiveVolume = AudioEffectsManager::calculateEffectiveVolume(baseVolume, effects);
-		Mix_VolumeChunk(sound, (int)round(128 * effectiveVolume));
-
-		/***** PLAY THE SOUND *****/
-		int channel = -1;
-		if( whenChannelsBusy == "return" )
-		{
-			//Try to find an open channel
-			SDL_LockAudioDevice(1);
-			channel = Mix_PlayChannel( -1, sound, 0 );
-			SDL_UnlockAudioDevice(1);
-
-			// Apply audio effects to the channel
-			if (channel != -1)
-			{
-				AudioEffectsManager::applyEffectsToChannel(channel, effects);
-			}
-		}
-		else if( whenChannelsBusy == "wait" )
-		{
-			//Wait until we have an available channel
-			while ( channel == -1 )
-			{
-				channel = Mix_PlayChannel( -1, sound, 0 );
-				if (channel == -1)
-				{
-					SDL_Delay(10); // Small delay to prevent busy-waiting
-				}
-			}
-
-			// Apply audio effects to the channel
-			if (channel != -1)
-			{
-				AudioEffectsManager::applyEffectsToChannel(channel, effects);
-			}
-		}
-		else //steal channel
-		{
-			//TODO FIND CHANNEL TO STEAL
-			void(0);
-		}
-
-		//If Mix_PlayChannel returns -1, the sound could not be played. Free the chunk and return the function
-		if (channel == -1) 
-		{
-			std::lock_guard<std::mutex> lock(stevensSound_chunkMutex);
-			// stevensFileLib::appendToFile( "stevensSound.log", "Unable to play sound on channel: " + std::to_string(channel) + "\n" );
-			// stevensFileLib::appendToFile( "stevensSound.log", "Mix_PlayChannel error: " + std::string(Mix_GetError()) + "\n" );
-			//Remove the chunk from the pool
-        	stevensSound_chunkPool.erase(sound);
-			// //Add delay to prevent errors of loading and freeing sounds too quickly
-			// SDL_Delay(100);
-			Mix_FreeChunk(sound);
-			return;
-		}
-
-		//Fallback: Garbage collect every 25 plays
-		static int cleanupCounter = 0;
-		if ( ++cleanupCounter >= 25 )
-		{
-			cleanupCounter = 0;
-			stevensSound::freeChunks(); // Forces cleanup of all chunks
-		}
-	}
-
-
 	inline 	void playSound_detached(	const std::string & category,
 								const std::string & soundName,
 								const std::string & whenChannelsBusy = "return"	)
 	{
-		std::thread soundThread = std::thread(	stevensSound::playSound,
+		std::thread soundThread = std::thread(	playSound,
 												category,
 												soundName,
 												whenChannelsBusy );
@@ -581,18 +498,151 @@ namespace stevensSound
 	 * Returns:
 	 * 	void, but creates a playlist that will be stored under the given playlist name in the playlists map.
 	*/
-	inline void createPlaylist(	std::string playlistName,
-							std::string controllerId,
-							std::vector<std::string> soundCategoriesUsed,
-							std::vector<std::string> trackOrder,
-							bool shuffleFill	)
+	inline SoundPlaylist createMusicPlaylist(	std::string playlistName,
+												std::string controllerId,
+												std::vector<std::string> musicCategoriesUsed,
+												std::vector<std::string> trackOrder,
+												bool shuffleFill	)
 	{
-		playlists.emplace( playlistName, s_soundPlaylist(	playlistName,
-															sounds,
-															soundCategoriesUsed,
-															trackOrder,
-															controllerId,
-															shuffleFill		)	);
+		SoundPlaylist playlist;
+		playlist.name = playlistName;
+		playlist.controllerId = controllerId;
+		playlist.index = 0;
+		playlist.status = "stopped";
+
+		//Create a temporary map for tracks we'll add
+		std::unordered_map<std::string, std::unordered_map<std::string, Music>> tracksToAdd = {};
+		for(const auto& category : musicCategoriesUsed)
+		{
+			tracksToAdd[category] = music[category];
+		}
+
+		//Add tracks in the specified order
+		bool foundTrack = false;
+		for(const auto& trackName : trackOrder)
+		{
+			for(const auto& category : musicCategoriesUsed)
+			{
+				if(tracksToAdd[category].contains(trackName))
+				{
+					playlist.sounds.push_back(std::make_tuple(category, trackName));
+					tracksToAdd[category].erase(trackName);
+					foundTrack = true;
+					break;
+				}
+			}
+			if(!foundTrack)
+			{
+				std::cerr << "createMusicPlaylist: Unable to find track '" << trackName << "' in music map.\n";
+			}
+			else
+			{
+				foundTrack = false;
+			}
+		}
+
+		//Shuffle-fill remaining tracks if requested
+		if(shuffleFill)
+		{
+			while(!tracksToAdd.empty())
+			{
+				//Pick random category
+				auto category_it = tracksToAdd.begin();
+				std::advance(category_it, rand() % tracksToAdd.size());
+				std::string random_category = category_it->first;
+
+				//Pick random track from that category
+				auto track_it = tracksToAdd[random_category].begin();
+				std::advance(track_it, rand() % tracksToAdd[random_category].size());
+				std::string random_track = track_it->first;
+
+				//Add to playlist
+				playlist.sounds.push_back(std::make_tuple(random_category, random_track));
+				tracksToAdd[random_category].erase(random_track);
+
+				//Remove empty categories
+				if(tracksToAdd[random_category].empty())
+				{
+					tracksToAdd.erase(random_category);
+				}
+			}
+		}
+
+		return playlist;
+	}
+
+
+	inline SoundPlaylist createSoundPlaylist(	std::string playlistName,
+												std::string controllerId,
+												std::vector<std::string> soundCategoriesUsed,
+												std::vector<std::string> soundOrder,
+												bool shuffleFill	)
+	{
+		SoundPlaylist playlist;
+		playlist.name = playlistName;
+		playlist.controllerId = controllerId;
+		playlist.index = 0;
+		playlist.status = "stopped";
+
+		//Create a temporary map for sounds we'll add
+		std::unordered_map<std::string, std::unordered_map<std::string, Sound>> soundsToAdd = {};
+		for(const auto& category : soundCategoriesUsed)
+		{
+			soundsToAdd[category] = sounds[category];
+		}
+
+		//Add sounds in the specified order
+		bool foundSound = false;
+		for(const auto& soundName : soundOrder)
+		{
+			for(const auto& category : soundCategoriesUsed)
+			{
+				if(soundsToAdd[category].contains(soundName))
+				{
+					playlist.sounds.push_back(std::make_tuple(category, soundName));
+					soundsToAdd[category].erase(soundName);
+					foundSound = true;
+					break;
+				}
+			}
+			if(!foundSound)
+			{
+				std::cerr << "createSoundPlaylist: Unable to find sound '" << soundName << "' in sounds map.\n";
+			}
+			else
+			{
+				foundSound = false;
+			}
+		}
+
+		//Shuffle-fill remaining sounds if requested
+		if(shuffleFill)
+		{
+			while(!soundsToAdd.empty())
+			{
+				//Pick random category
+				auto category_it = soundsToAdd.begin();
+				std::advance(category_it, rand() % soundsToAdd.size());
+				std::string random_category = category_it->first;
+
+				//Pick random sound from that category
+				auto sound_it = soundsToAdd[random_category].begin();
+				std::advance(sound_it, rand() % soundsToAdd[random_category].size());
+				std::string random_sound = sound_it->first;
+
+				//Add to playlist
+				playlist.sounds.push_back(std::make_tuple(random_category, random_sound));
+				soundsToAdd[random_category].erase(random_sound);
+
+				//Remove empty categories
+				if(soundsToAdd[random_category].empty())
+				{
+					soundsToAdd.erase(random_category);
+				}
+			}
+		}
+
+		return playlist;
 	}
 
 
@@ -605,41 +655,41 @@ namespace stevensSound
 	inline 	void switchMusicPlaylist(	const std::string & switchToPlaylist	)
 	{
 		//Before we try a switch, make sure the playlist we want to switch to exists
-		if( !stevensSound::playlists.contains( switchToPlaylist ) )
+		if( !playlists.contains( switchToPlaylist ) )
 		{
 			ErrorHandler::setError(ErrorLevel::ERROR,
 				"Playlist \"" + switchToPlaylist + "\" does not exist",
 				"switchMusicPlaylist");
 			return;
 		}
-		//Also make sure the playlist we are switching from still is stored under the same key in stevensSound::playlists
-		if( !stevensSound::playlists.contains( stevensSound::playlists.at("currently playing").getName() ) )
+		//Also make sure the playlist we are switching from still is stored under the same key in playlists
+		if( !playlists.contains( playlists.at("currently playing").getName() ) )
 		{
 			ErrorHandler::setError(ErrorLevel::ERROR,
-				"Currently playing playlist \"" + stevensSound::playlists.at("currently playing").getName() + "\" does not exist in playlists map",
+				"Currently playing playlist \"" + playlists.at("currently playing").getName() + "\" does not exist in playlists map",
 				"switchMusicPlaylist");
 			return;
 		}
 
 		//Set the currently playing playlist to start the switching process. This will trigger an if statement in playMusicPlaylist()
-		stevensSound::playlists.at("currently playing").status = "switching";
-        stevensSound::audioChange = true;
+		playlists.at("currently playing").status = "switching";
+        audioChange = true;
 
 		//Wait for the music change to be completed in the playMusicPlaylist() function
-		while( stevensSound::audioChange )
+		while( audioChange )
 		{
 			SDL_Delay(10);
 		}
-		
+
 		//Store the currrent state of the current playlist before switching it
-		stevensSound::playlists.at( stevensSound::playlists.at("currently playing").getName()  ) = stevensSound::playlists.at("currently playing");
+		playlists.at( playlists.at("currently playing").getName()  ) = playlists.at("currently playing");
 
 		//Switch the playlist now
-		stevensSound::playlists.at("currently playing") = stevensSound::playlists.at(switchToPlaylist);
+		playlists.at("currently playing") = playlists.at(switchToPlaylist);
 
 		//Start up the music again
-		stevensSound::playlists.at("currently playing").status = "playing";
-		stevensSound::audioChange = true;
+		playlists.at("currently playing").status = "playing";
+		audioChange = true;
 	}
 
 
@@ -649,11 +699,11 @@ namespace stevensSound
 	inline 	void stopMusicPlaylist()
 	{
 		//Stop the current music
-		stevensSound::playlists.at("currently playing").status = "stopped";
-		stevensSound::audioChange = true;
+		playlists.at("currently playing").status = "stopped";
+		audioChange = true;
 
 		//Wait for the music to stop
-		while(stevensSound::audioChange)
+		while(audioChange)
 		{
 			SDL_Delay(100);
 		}
@@ -663,7 +713,7 @@ namespace stevensSound
 
 
 	/**
-	 * @brief Initiates playing a playlist for music. Typically used on a separate thread than the main one.
+	 * @brief Initiates playing a playlist for music. Typically used on a separate std::thread than the main one.
 	 * 		  Use this function for playing a playlist of sounds that you would want to be able to pause, modify
 	 * 		  the volume of, loop, shuffle between sounds, etc.
 	 * 
@@ -674,7 +724,7 @@ namespace stevensSound
 	 * 		void
 	 * 
 	 **/
-	inline 	void playMusicPlaylist(	s_soundPlaylist & playlist,
+	inline 	void playMusicPlaylist(	SoundPlaylist & playlist,
 							std::string onCompletion = "end")
 	{
 		playlist.status = "playing";
@@ -701,36 +751,36 @@ namespace stevensSound
 				{
 					SDL_Delay( playlist.preTrackDelays.at(playlist.index) );
 				}
-				//Try to load in the music file
-				currentSound = Mix_LoadMUS( stevensSound::sounds[categoryName][soundName].filePath );
-				//If we fail to load the sound in, print an error message and go to the next sound in the music playlist
-				if (currentSound == nullptr)
-				{
-					std::string errorMsg = "Mix_LoadMUS failed for: ";
-					errorMsg += stevensSound::sounds[categoryName][soundName].filePath;
-					errorMsg += " - Error: ";
-					errorMsg += Mix_GetError();
-					//stevensFileLib::appendToFile("errorLog.txt", errorMsg + "\n");
+				//Get the Music object from the cache
+				Music& musicToPlay = music[categoryName][soundName];
 
+				//Validate the music before playing it
+				if (!musicToPlay.isValid())
+				{
+					// Error already logged by Music::isValid()
 					SDL_ClearError();  // Clear the error state
 					playlist.index++;
-					continue;
+					continue;  // Skip to next track
 				}
+
+				//Get the Mix_Music handle
+				currentSound = musicToPlay.musicData.music;
 
 				//Play the music!
 				Mix_PlayMusic(currentSound, 1);
 
 				while( Mix_PlayingMusic() )
 				{
-					if( stevensSound::audioChange ) //If a change in music settings is detected, apply the change to the current playing music
+					if( audioChange ) //If a change in music settings is detected, apply the change to the current playing music
 					{
 						/*** Switch the playlist to another ***/
 						if (playlist.status == "switching")
 						{
 							Mix_HaltMusic();
-							Mix_FreeMusic(currentSound);
+							// DO NOT free the music - it's cached in the global music map for reuse
+							// Mix_FreeMusic(currentSound);  // REMOVED - was causing use-after-free
 							currentSound = nullptr;
-							stevensSound::audioChange = false;
+							audioChange = false;
 							//Go to the top of this function
 							goto beginPlaylist;
 						}
@@ -738,14 +788,15 @@ namespace stevensSound
 						if	(playlist.status == "stopped")
 						{
 							Mix_HaltMusic();
-							Mix_FreeMusic(currentSound);
-							stevensSound::audioChange = false;
+							// DO NOT free the music - it's cached in the global music map for reuse
+							// Mix_FreeMusic(currentSound);  // REMOVED - was causing use-after-free
+							audioChange = false;
 							return;
 						}
 						/*** Apply volume changes ***/
-						Mix_VolumeMusic(128 * stevensSound::soundControllers[playlist.controllerId].volume);
+						Mix_VolumeMusic(128 * soundControllers[playlist.controllerId].volume);
 						/*** Pausing and unpausing playlist ***/
-						if ( stevensSound::soundControllers[playlist.controllerId].volume == 0) //If the volume becomes 0, pause the song
+						if ( soundControllers[playlist.controllerId].volume == 0) //If the volume becomes 0, pause the song
 						{
 							Mix_PauseMusic();
 							playlist.status = "paused";
@@ -763,7 +814,7 @@ namespace stevensSound
 							Mix_ResumeMusic();
 							playlist.status = "playing";
 						}
-						stevensSound::audioChange = false;
+						audioChange = false;
 					}
 					//We hang out here in this loop while the music is playing
 					SDL_Delay(100);
@@ -813,7 +864,7 @@ namespace stevensSound
 	 * 		  coming into a memory conflict of playing the same playlist by reference while it's already playing (remember the error
 	 * 		  of combat sound effects throwing memory error when we mashed through combat)
 	 */
-	inline 	void playPlaylist(	s_soundPlaylist playlist	)
+	inline 	void playPlaylist(	SoundPlaylist playlist	)
 	{
 		playlist.status = "playing";
 		std::string categoryName; //The category of the sound that is currently playing
@@ -830,7 +881,7 @@ namespace stevensSound
 				SDL_Delay( playlist.preTrackDelays.at(playlist.index) );
 			}
 			//Play the sound!
-			stevensSound::playSound( categoryName, soundName );
+			playSound( categoryName, soundName );
 			//When the track finishes playing, if we have a postTrackDelay, delay here
 			if( playlist.postTrackDelays.contains(playlist.index) )
 			{
@@ -892,10 +943,12 @@ inline void closeSound()
 
 	// Step 3: Free resources
     stevensSound::freeChunks();
-	stevensSound::freePersistentChunks();
+	stevensSound::freeMixChunks();
 
 	//Exit the framework
 	Mix_CloseAudio();
 	Mix_Quit();
 	SDL_Quit();
 }
+
+#endif // STEVENS_SOUND_HPP
