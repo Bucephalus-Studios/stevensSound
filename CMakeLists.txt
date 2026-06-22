@@ -94,7 +94,7 @@ endif()
 
 target_compile_features(stevensSound PUBLIC cxx_std_20)
 
-target_link_libraries(stevensSound INTERFACE stevensVectorLib stevensFileLib)
+target_link_libraries(stevensSound PUBLIC stevensVectorLib stevensFileLib)
 
 # Add thread support
 find_package(Threads REQUIRED)
