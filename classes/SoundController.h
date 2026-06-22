@@ -3,8 +3,7 @@
  * @brief Controller for managing sound volume settings
  */
 
-#ifndef STEVENSSOUND_SOUNDCONTROLLER_H
-#define STEVENSSOUND_SOUNDCONTROLLER_H
+#pragma once
 
 #include <string>
 
@@ -36,5 +35,3 @@ public:
 };
 
 } // namespace stevensSound
-
-#endif // STEVENSSOUND_SOUNDCONTROLLER_H

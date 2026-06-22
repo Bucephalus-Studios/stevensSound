@@ -5,8 +5,7 @@
  * @date 2025-11-14
  */
 
-#ifndef STEVENSSOUND_ERROR_HANDLER_H
-#define STEVENSSOUND_ERROR_HANDLER_H
+#pragma once
 
 #include <string>
 #include <functional>
@@ -169,5 +168,3 @@ namespace stevensSound
     inline bool ErrorHandler::enableLogging = false;
 
 } // namespace stevensSound
-
-#endif // STEVENSSOUND_ERROR_HANDLER_H

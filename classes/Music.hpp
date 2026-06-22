@@ -1,17 +1,25 @@
+#pragma once
+
+#include <string>
+#include "Mix_MusicData.h"
+#include "ErrorHandler.hpp"
+
+namespace stevensSound
+{
+
 /**
  *  An object used in the stevensSound library which represents music and its associated data
  *  within code. Music uses Mix_Music for streaming playback.
  */
-
 class Music
 {
     public:
         /*** Member variables ***/
-        std::string  name;       //The name of the music track
-        std::string  type;       //The type of music (e.g., "music", "battle music")
-        std::string controllerId; //The id of the sound controller of this music
+        std::string  name;
+        std::string  type;
+        std::string controllerId;
 
-        Mix_MusicData musicData;  //The music data with file path and Mix_Music handle
+        Mix_MusicData musicData;
 
 
         /*** Constructors ***/
@@ -36,14 +44,6 @@ class Music
 
 
         /*** Methods ***/
-        /**
-         * @brief Validates that this Music object's Mix_Music handle is safe to use
-         *
-         * Checks that the Mix_Music pointer is not null and is valid for playback.
-         * If validation fails, logs an error with the music's name for debugging.
-         *
-         * @return true if the music is valid and safe to play, false otherwise
-         */
         bool isValid() const
         {
             if (musicData.music == nullptr)
@@ -56,12 +56,6 @@ class Music
             return true;
         }
 
-        /**
-         * @brief Free the Mix_Music handle owned by this music data object
-         *
-         * WARNING: Should ONLY be called during program shutdown in cleanUp().
-         * Do NOT call this during normal playback or playlist switching!
-         */
         void freeMusic()
         {
             musicData.free();
@@ -70,3 +64,5 @@ class Music
 
     private:
 };
+
+} // namespace stevensSound

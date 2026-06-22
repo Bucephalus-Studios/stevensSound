@@ -3,8 +3,7 @@
  * @brief Data structure representing a sound and its associated metadata
  */
 
-#ifndef STEVENSSOUND_SOUNDDATA_H
-#define STEVENSSOUND_SOUNDDATA_H
+#pragma once
 
 #include <string>
 
@@ -45,5 +44,3 @@ public:
 };
 
 } // namespace stevensSound
-
-#endif // STEVENSSOUND_SOUNDDATA_H

@@ -3,8 +3,7 @@
  * @brief Playlist structure for managing ordered sequences of sounds
  */
 
-#ifndef STEVENSSOUND_SOUNDPLAYLIST_H
-#define STEVENSSOUND_SOUNDPLAYLIST_H
+#pragma once
 
 #include <string>
 #include <vector>
@@ -174,5 +173,3 @@ public:
 };
 
 } // namespace stevensSound
-
-#endif // STEVENSSOUND_SOUNDPLAYLIST_H

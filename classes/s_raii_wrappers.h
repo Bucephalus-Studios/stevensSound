@@ -8,8 +8,7 @@
  * for SDL_mixer resources to ensure automatic cleanup and prevent memory leaks.
  */
 
-#ifndef STEVENSSOUND_RAII_WRAPPERS_H
-#define STEVENSSOUND_RAII_WRAPPERS_H
+#pragma once
 
 #include <SDL2/SDL_mixer.h>
 #include <memory>
@@ -291,5 +290,3 @@ namespace stevensSound
     }
 
 } // namespace stevensSound
-
-#endif // STEVENSSOUND_RAII_WRAPPERS_H
