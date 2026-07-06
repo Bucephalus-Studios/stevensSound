@@ -1,17 +1,16 @@
 # stevensSound
 
-An easy-to-use, modern C++ audio library built on top of SDL2 and SDL2_mixer, featuring automatic resource management, comprehensive error handling, and audio effects.
+An easy-to-use, modern C++ audio library built on top of SDL2 and SDL2_mixer, featuring automatic resource management, comprehensive error handling, and playlist management.
 
 ## Features
 
-- **Zero-dependency installation**: SDL2 and SDL2_mixer are automatically downloaded and statically linked
-- **Modern C++20**: RAII wrappers, smart pointers, and move semantics
+- **Zero-dependency installation**: SDL2, SDL2_mixer, and stevensVectorLib are automatically fetched and statically linked via CMake FetchContent
+- **Modern C++20**
 - **Comprehensive error handling**: Thread-safe error system with custom handlers
-- **Audio effects**: Pitch modulation, panning, and anti-fatigue randomization
-- **Playlist management**: Create, manage, and control music playlists
-- **Thread-safe**: Safe for multi-threaded applications
-- **Header-only**: Simple integration into your project
-- **Fully tested**: Includes Google Test suite and Google Benchmark
+- **Sound variants**: Register multiple audio files under one sound name to get random variation on each play (useful for avoiding repetitive UI/SFX fatigue)
+- **Playlist management**: Create, switch between, and control music/sound playlists from a background thread
+- **Thread-safe playback**: Music playback runs on its own thread and is driven by a small command queue (switch/stop/volume)
+- **Fully tested**: Includes a Google Test suite and Google Benchmark suite
 
 ## Quick Start
 
@@ -21,6 +20,14 @@ An easy-to-use, modern C++ audio library built on top of SDL2 and SDL2_mixer, fe
 mkdir build && cd build
 cmake ..
 cmake --build .
+```
+
+Ninja works too, and avoids a known Makefile-generation issue in SDL2_mixer's build (see [BUILD_NOTES.md](BUILD_NOTES.md)):
+
+```bash
+mkdir build && cd build
+cmake .. -G Ninja
+ninja
 ```
 
 ### Basic Usage
@@ -37,7 +44,8 @@ int main()
         return 1;
     }
 
-    // Set up your sounds
+    // Set up your sounds. Any category whose name contains "music" is loaded
+    // as streamed Mix_Music; every other category is loaded as a Mix_Chunk.
     std::unordered_map<std::string, std::unordered_map<std::string, const char*>> sounds = {
         {"sfx", {
             {"button_click", "sounds/button.wav"},
@@ -84,49 +92,30 @@ if (stevensSound::ErrorHandler::hasError())
 }
 ```
 
-### 2. RAII Resource Management
+### 2. Sound Variants (Anti-Fatigue)
+
+Register several files under the same sound; each call to `playSound()` picks one at random.
 
 ```cpp
-// Automatic cleanup with RAII wrappers
-{
-    auto chunk = stevensSound::makeMixChunk("sound.wav");
-    if (chunk && chunk->isValid())
-    {
-        // Use the sound
-        Mix_PlayChannel(-1, chunk->get(), 0);
-    }
-    // Automatically freed when out of scope
-}
+stevensSound::Sound footstep = stevensSound::createSound(
+    "footstep", "sfx", "sfx",
+    "sounds/footstep1.wav",
+    { "sounds/footstep2.wav", "sounds/footstep3.wav" }  // variants
+);
+stevensSound::sounds["sfx"]["footstep"] = footstep;
+
+stevensSound::playSound("sfx", "footstep");  // plays a random variant each time
 ```
 
-### 3. Audio Effects & Anti-Fatigue
+### 3. Playlist Management
 
 ```cpp
-// Set up anti-fatigue for repetitive UI sounds
-stevensSound::setupAntiFatigueSound("sfx", "button_click", 0.1f);
-
-// The sound will now have slight pitch/volume variation on each play
-stevensSound::playSound("sfx", "button_click");  // Slightly different each time
-
-// Custom effects
-stevensSound::AudioEffects effects;
-effects.volumeModulation = 0.8f;   // 80% volume
-effects.panPosition = -0.5f;        // Pan to left
-effects.randomizePitch = true;
-effects.randomRange = 0.15f;        // 15% variation
-
-stevensSound::AudioEffectsManager::setEffects("sfx", "notification", effects);
-```
-
-### 4. Playlist Management
-
-```cpp
-// Create a music playlist
+// Create a music playlist and register it
 std::vector<std::string> categories = {"music"};
 std::vector<std::string> trackOrder = {"song1", "song2", "song3"};
 
-stevensSound::createPlaylist(
-    "my_playlist",
+stevensSound::playlists["game_music"] = stevensSound::createMusicPlaylist(
+    "game_music",
     "music",
     categories,
     trackOrder,
@@ -136,38 +125,25 @@ stevensSound::createPlaylist(
 // Play the playlist on a separate thread
 std::thread musicThread(
     stevensSound::playMusicPlaylist,
-    std::ref(stevensSound::playlists["my_playlist"]),
+    std::ref(stevensSound::playlists["game_music"]),
     "loop"  // Loop when finished
 );
 musicThread.detach();
 
-// Switch to another playlist
+// Switch to another playlist (fire-and-forget; picked up by the music thread)
 stevensSound::switchMusicPlaylist("another_playlist");
 
-// Stop the music
+// Stop the music (blocks until the music thread acknowledges)
 stevensSound::stopMusicPlaylist();
-```
-
-### 5. Persistent Sound Loading
-
-```cpp
-// Pre-load frequently used sounds into memory
-stevensSound::storePersistentSound("sfx", "button_click");
-
-// Now this sound plays with minimal latency (no disk I/O)
-stevensSound::playSound("sfx", "button_click");  // Fast!
-
-// Free when no longer needed
-stevensSound::freePersistentSound("sfx", "button_click");
 ```
 
 ## SDL Versions
 
-This library is designed to work with:
-- **SDL2**: Version 2.0.22
-- **SDL2_mixer**: Version 2.6.3+
+This library fetches and builds against:
+- **SDL2**: Version 2.28.5
+- **SDL2_mixer**: Version 2.6.3
 
-**Note:** Due to CMake/Makefile issues with SDL2_mixer's FetchContent integration, we recommend installing SDL2/SDL2_mixer via your system package manager for the best experience. See [BUILD_NOTES.md](BUILD_NOTES.md) for details and workarounds.
+**Note:** Due to CMake/Makefile issues with SDL2_mixer's FetchContent integration in some environments, you can alternatively install SDL2/SDL2_mixer via your system package manager. See [BUILD_NOTES.md](BUILD_NOTES.md) for details and workarounds.
 
 ## Building Options
 
@@ -185,16 +161,18 @@ cmake -DSTEVENSSOUND_BUILD_BENCHMARKS=OFF ..
 cmake -DSTEVENSSOUND_BUILD_EXAMPLES=OFF ..
 ```
 
+These options only default to `ON` when stevensSound is built as the top-level project. If you add it via `add_subdirectory()` from your own game's CMake project, none of tests/examples/benchmarks are built unless you opt in.
+
 ## Running Tests
 
 ```bash
 # Build and run tests
-cmake --build . --target stevensSound_tests
-./bin/stevensSound_tests
+cmake --build . --target tests
+./tests/tests
 
-# Run benchmarks
-cmake --build . --target stevensSound_benchmarks
-./bin/stevensSound_benchmarks
+# Build and run benchmarks
+cmake --build . --target benchmarks
+./benchmarks/benchmarks
 ```
 
 ## Examples
@@ -204,142 +182,69 @@ The `examples/` directory contains complete working examples:
 - `basic_example.cpp` - Basic library usage
 - `error_handling_example.cpp` - Error handling features
 - `playlist_example.cpp` - Playlist management
-- `raii_example.cpp` - RAII wrappers
-- `pitch_modulation_example.cpp` - Audio effects
 
 Build and run:
 
 ```bash
-cmake --build . --target basic_example
-./bin/basic_example
+cmake --build . --target basic
+./examples/basic
 ```
 
 ## Project Structure
 
 ```
 stevensSound/
-├── stevensSound.hpp           # Main library header
-├── classes/                   # Library components
-│   ├── s_soundData.h         # Sound data structure
-│   ├── s_soundController.h   # Volume controller
-│   ├── s_soundPlaylist.h     # Playlist management
-│   ├── s_errorHandler.h      # Error handling system
-│   ├── s_raii_wrappers.h     # RAII resource wrappers
-│   └── s_pitchModulation.h   # Audio effects
-├── libraries/                 # Utility libraries
-│   ├── stevensSetLib.h       # Set utilities
-│   └── stevensFileLib.hpp    # File utilities
-├── tests/                     # Google Test suite
-├── benchmarks/                # Google Benchmark suite
-├── examples/                  # Usage examples
-└── CMakeLists.txt            # Build configuration
+├── stevensSound.hpp           # Main library header (includes classes/ below)
+├── stevensSound.cpp            # Compiled implementation
+├── classes/                    # Library components
+│   ├── AudioCommand.hpp       # Internal command-queue message type
+│   ├── ErrorHandler.hpp       # Thread-safe error handling system
+│   ├── Mix_ChunkData.h        # Wraps a Mix_Chunk + its file path
+│   ├── Mix_MusicData.h        # Wraps a Mix_Music + its file path
+│   ├── Music.hpp               # A named, loaded piece of music
+│   ├── PlaybackController.hpp # Per-category volume controller
+│   ├── PlaylistSwitchOptions.hpp
+│   ├── Sound.hpp               # A named sound with optional variants
+│   └── SoundPlaylist.hpp       # Ordered list of sound/music keys
+├── tests/                      # Google Test suite
+├── benchmarks/                 # Google Benchmark suite
+├── examples/                   # Usage examples
+└── CMakeLists.txt              # Build configuration
 ```
 
 ## API Reference
 
-### Initialization
-
-```cpp
-bool initSound();                          // Initialize SDL/SDL_mixer
-void closeSound();                         // Clean up SDL/SDL_mixer
-bool stevensSound::init(sounds);           // Initialize library with sounds
-```
-
-### Sound Playback
-
-```cpp
-void stevensSound::playSound(category, name, whenChannelsBusy);
-void stevensSound::playSound_detached(category, name, whenChannelsBusy);
-void stevensSound::playPersistentSound(category, name, whenChannelsBusy);
-```
-
-### Memory Management
-
-```cpp
-void stevensSound::storePersistentSound(category, name);
-void stevensSound::freePersistentSound(category, name);
-void stevensSound::freeChunks();
-void stevensSound::freePersistentChunks();
-```
-
-### Playlist Management
-
-```cpp
-void stevensSound::createPlaylist(name, controllerId, categories, trackOrder, shuffleFill);
-void stevensSound::playMusicPlaylist(playlist, onCompletion);
-void stevensSound::switchMusicPlaylist(playlistName);
-void stevensSound::stopMusicPlaylist();
-```
-
-### Audio Effects
-
-```cpp
-// Anti-fatigue setup
-void stevensSound::setupAntiFatigueSound(category, name, randomRange);
-
-// Effects management
-void stevensSound::AudioEffectsManager::setEffects(category, name, effects);
-AudioEffects stevensSound::AudioEffectsManager::getEffects(category, name);
-void stevensSound::AudioEffectsManager::setPitchVariation(category, name, variation);
-void stevensSound::AudioEffectsManager::setPanPosition(category, name, pan);
-```
-
-### Error Handling
-
-```cpp
-void stevensSound::ErrorHandler::setErrorHandler(handler);
-void stevensSound::ErrorHandler::setLogging(enable);
-ErrorInfo stevensSound::ErrorHandler::getLastError();
-std::string stevensSound::ErrorHandler::getLastErrorMessage();
-bool stevensSound::ErrorHandler::hasError();
-void stevensSound::ErrorHandler::clearError();
-```
+See [API.md](API.md) for the full API reference.
 
 ## Important Notes
 
-### Pitch Shifting Limitation
+### No True Pitch Shifting
 
-SDL_mixer does not natively support true pitch shifting without tempo changes. The pitch modulation features in this library provide:
-- Volume modulation for perceived pitch variation
-- Panning effects
-- Random variation to prevent audio fatigue
+SDL_mixer does not natively support true pitch shifting without tempo changes, and this library does not implement it. A libsoundtouch-based prototype was explored but removed as incomplete. If you need pitch shifting, integrate a DSP library such as [libsoundtouch](https://www.surina.net/soundtouch/) or [SoLoud](https://solhsa.com/soloud/) directly in your application, or use `createSound()`'s variant files for perceived variation instead.
 
-For true pitch shifting, consider integrating:
-- [SoLoud](https://solhsa.com/soloud/)
-- [libsoundtouch](https://www.surina.net/soundtouch/)
-- PortAudio with custom DSP
+### Resource Lifecycle
+
+- All sounds/music passed to `stevensSound::init()` are loaded once and cached for the lifetime of the program.
+- Never call `Mix_FreeChunk()`/`Mix_FreeMusic()` on cached resources yourself — `closeSound()` frees everything on shutdown.
+- Extra chunks played via `playSound()` (not part of the initial load) are tracked in an internal pool and freed automatically when they finish playing, or via `stevensSound::freeChunks()`.
 
 ### Thread Safety
 
 - Error handling is thread-safe (uses thread_local storage)
+- `playMusicPlaylist()` is meant to run on a dedicated thread; switching/stopping/volume changes from other threads are delivered via an internal command queue
 - Sound playback uses mutexes for resource pool management
-- Playlist switching is synchronized with audio thread
 
 ### Supported Audio Formats
 
 Thanks to SDL_mixer, supports:
 - WAV, AIFF, VOC (native)
-- MP3, OGG, FLAC (when compiled with support)
-- MOD, XM, IT (tracker formats)
-
-## Performance
-
-The library includes benchmarks for performance testing:
-
-```bash
-./bin/stevensSound_benchmarks
-```
-
-Key optimizations:
-- Persistent sound caching for frequently used sounds
-- RAII wrappers prevent memory leaks
-- Efficient resource pooling
-- Lock-free error handling per thread
+- MP3, OGG (enabled by this library's CMake configuration)
+- FLAC, tracker formats (MOD/XM/IT) are disabled by default in CMakeLists.txt but can be re-enabled there
 
 ## Contributing
 
 When contributing, please:
-1. Run tests: `./bin/stevensSound_tests`
+1. Run tests: `./tests/tests`
 2. Run benchmarks to check for regressions
 3. Follow existing code style
 4. Add tests for new features
@@ -351,16 +256,6 @@ See LICENSE file for details.
 ## Credits
 
 - Built on [SDL2](https://www.libsdl.org/) and [SDL2_mixer](https://github.com/libsdl-org/SDL_mixer)
+- Uses [stevensVectorLib](https://github.com/Bucephalus-Studios/stevensVectorLib) for variant selection
 - Uses [Google Test](https://github.com/google/googletest) for testing
 - Uses [Google Benchmark](https://github.com/google/benchmark) for performance testing
-
-## Version History
-
-### 1.0.0 (2025-11-14)
-- Initial release
-- Comprehensive error handling system
-- RAII resource wrappers
-- Audio effects and anti-fatigue features
-- CMake build system with automatic SDL dependency management
-- Full test and benchmark suite
-- Complete documentation and examples

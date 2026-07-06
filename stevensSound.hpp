@@ -41,8 +41,6 @@
 #include "classes/PlaylistSwitchOptions.hpp"
 #include "classes/Sound.hpp"
 #include "classes/SoundPlaylist.hpp"
-// NOTE: Pitch modulation feature is untested and still a stub implementation
-// #include "classes/s_pitchModulation.h"
 
 /***** Global variables and helpers for managing Mix_Chunk memory (defined in stevensSound.cpp) *****/
 static std::mutex stevensSound_chunkMutex;

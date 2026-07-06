@@ -41,37 +41,20 @@ TEST_F(SoundPlaybackTest, PlayInvalidSound)
     EXPECT_EQ(error.level, stevensSound::ErrorLevel::ERROR);
 }
 
-TEST_F(SoundPlaybackTest, StorePersistentSoundError)
-{
-    // Try to store a sound that doesn't exist
-    stevensSound::storePersistentSound("sfx", "nonexistent");
-
-    EXPECT_TRUE(stevensSound::ErrorHandler::hasError());
-    auto error = stevensSound::ErrorHandler::getLastError();
-    EXPECT_EQ(error.level, stevensSound::ErrorLevel::ERROR);
-}
-
-TEST_F(SoundPlaybackTest, FreePersistentSoundError)
-{
-    // Try to free a sound that isn't persistently stored
-    stevensSound::freePersistentSound("sfx", "nonexistent");
-
-    EXPECT_TRUE(stevensSound::ErrorHandler::hasError());
-    auto error = stevensSound::ErrorHandler::getLastError();
-    EXPECT_EQ(error.level, stevensSound::ErrorLevel::ERROR);
-}
-
-TEST_F(SoundPlaybackTest, CreatePlaylist)
+TEST_F(SoundPlaybackTest, CreateSoundPlaylist)
 {
     stevensSound::ErrorHandler::clearError();
 
     std::vector<std::string> categories = {"sfx"};
     std::vector<std::string> trackOrder = {};
 
-    stevensSound::createPlaylist("test_playlist", "sfx", categories, trackOrder, false);
+    stevensSound::SoundPlaylist playlist =
+        stevensSound::createSoundPlaylist("test_playlist", "sfx", categories, trackOrder, false);
 
     // Should complete without error
     EXPECT_FALSE(stevensSound::ErrorHandler::hasError());
+    EXPECT_EQ(playlist.name, "test_playlist");
+    EXPECT_EQ(playlist.controllerId, "sfx");
 }
 
 TEST_F(SoundPlaybackTest, SwitchToNonExistentPlaylist)

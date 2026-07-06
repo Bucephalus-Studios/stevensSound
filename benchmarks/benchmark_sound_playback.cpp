@@ -24,7 +24,7 @@ static void CreatePlaylist(benchmark::State& state)
     for (auto _ : state)
     {
         std::string playlistName = "test_playlist_" + std::to_string(counter++);
-        stevensSound::createPlaylist(playlistName, "music", categories, trackOrder, false);
+        stevensSound::createMusicPlaylist(playlistName, "music", categories, trackOrder, false);
     }
 
     closeSound();
@@ -51,8 +51,8 @@ static void VolumeControllerAccess(benchmark::State& state)
 }
 BENCHMARK(VolumeControllerAccess);
 
-// Benchmark isPersistentlyStored check
-static void IsPersistentlyStored(benchmark::State& state)
+// Benchmark playlist lookup
+static void PlaylistLookup(benchmark::State& state)
 {
     initSound();
 
@@ -64,12 +64,12 @@ static void IsPersistentlyStored(benchmark::State& state)
 
     for (auto _ : state)
     {
-        benchmark::DoNotOptimize(stevensSound::isPersistentlyStored("sfx", "test"));
+        benchmark::DoNotOptimize(stevensSound::playlists.contains("currently playing"));
     }
 
     closeSound();
 }
-BENCHMARK(IsPersistentlyStored);
+BENCHMARK(PlaylistLookup);
 
 // Benchmark error checking
 static void ErrorChecking(benchmark::State& state)

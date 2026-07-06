@@ -53,16 +53,8 @@ int main()
     std::cout << "1. Attempting to play non-existent sound...\n";
     stevensSound::playSound("sfx", "does_not_exist");
 
-    // Scenario 2: Store non-existent sound persistently
-    std::cout << "\n2. Attempting to store non-existent sound...\n";
-    stevensSound::storePersistentSound("sfx", "another_missing_sound");
-
-    // Scenario 3: Free non-persistent sound
-    std::cout << "\n3. Attempting to free non-persistent sound...\n";
-    stevensSound::freePersistentSound("sfx", "not_stored");
-
-    // Scenario 4: Switch to non-existent playlist
-    std::cout << "\n4. Attempting to switch to non-existent playlist...\n";
+    // Scenario 2: Switch to non-existent playlist
+    std::cout << "\n2. Attempting to switch to non-existent playlist...\n";
     stevensSound::switchMusicPlaylist("imaginary_playlist");
 
     // Check final error state

@@ -58,18 +58,6 @@ TEST_F(SoundLoadingTest, SoundsContains)
     EXPECT_FALSE(stevensSound::soundsContains("music", "nonexistent"));
 }
 
-TEST_F(SoundLoadingTest, IsPersistentlyStored)
-{
-    std::unordered_map<std::string, std::unordered_map<std::string, const char*>> sounds = {
-        {"sfx", {}}
-    };
-
-    stevensSound::init(sounds);
-
-    // Should not be persistently stored
-    EXPECT_FALSE(stevensSound::isPersistentlyStored("sfx", "nonexistent"));
-}
-
 TEST_F(SoundLoadingTest, ErrorOnInvalidSound)
 {
     std::unordered_map<std::string, std::unordered_map<std::string, const char*>> sounds = {

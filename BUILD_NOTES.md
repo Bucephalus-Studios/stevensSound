@@ -10,9 +10,18 @@ There is a known issue with SDL2_mixer 2.6.3 and 2.8.1 when building via FetchCo
 target pattern contains no '%'.  Stop.
 ```
 
-This is a CMake/Makefile generation issue in SDL2_mixer's build system, not an issue with stevensSound itself.
+This is a CMake/Makefile generation issue in SDL2_mixer's build system, not an issue with stevensSound itself. It is specific to the `Unix Makefiles` generator.
 
 ### Workaround Options
+
+#### Option 0: Use the Ninja Generator (Recommended)
+
+Switching generators avoids the issue entirely, since it's specific to Makefile generation:
+
+```bash
+cmake .. -G Ninja
+ninja
+```
 
 #### Option 1: Use System SDL2 (Recommended for Development)
 
@@ -43,42 +52,36 @@ Then disable FetchContent in CMakeLists.txt and use find_package instead.
 cmake .. -DCMAKE_PREFIX_PATH=/path/to/sdl/install
 ```
 
-#### Option 3: Header-Only Integration
+#### Option 3: Compile Without the CMake Build System
 
-The library itself is header-only. You can:
+`stevensSound.cpp` is a regular translation unit — you can compile it directly instead of using the provided CMakeLists.txt:
 
-1. Include `stevensSound.hpp` in your project
-2. Link against system SDL2/SDL2_mixer
-3. Use the library without the CMake build system
-
-Example:
-```cpp
-g++ -std=c++20 my_app.cpp -lSDL2 -lSDL2_mixer -lpthread
+```bash
+g++ -std=c++20 -c stevensSound.cpp -I. -I/path/to/stevensVectorLib -I/path/to/stevensMathLib $(pkg-config --cflags sdl2 SDL2_mixer)
+g++ -std=c++20 my_app.cpp stevensSound.o -lSDL2 -lSDL2_mixer -lpthread
 ```
 
 ## Library Code Status
 
-All library code is complete and functional:
 - ✅ Error handling system
-- ✅ RAII wrappers
-- ✅ Audio effects and pitch modulation
 - ✅ Playlist management
+- ✅ Sound variants (anti-fatigue random selection)
 - ✅ Thread-safe resource management
-- ✅ Complete documentation
-- ✅ Test suite (requires SDL2 to run)
-- ✅ Benchmark suite (requires SDL2 to run)
-- ✅ Examples (require SDL2 to compile)
+- ✅ Test suite
+- ✅ Benchmark suite
+- ✅ Examples
 
-The issue is purely with the automated dependency fetching, not the library itself.
+Pitch modulation and RAII wrapper classes were prototyped in earlier revisions but removed — they depended on a since-dropped SoundTouch dependency / were never wired into the public header. See git history if you want to revisit either.
+
+The Makefile-generation issue above is purely with SDL2_mixer's own build scripts, not stevensSound itself.
 
 ## Recommended Usage
 
 For production use, we recommend:
-1. Install SDL2/SDL2_mixer via your system's package manager
-2. Include stevensSound.hpp in your project
-3. Link against the installed libraries
+1. Build via the root CMakeLists.txt with the Ninja generator (see Option 0 above), or
+2. Install SDL2/SDL2_mixer via your system's package manager and use `find_package` instead of FetchContent
 
-This avoids the FetchContent build issues entirely and gives you more control over the SDL2 versions used.
+Both avoid the Makefile-generation issue entirely.
 
 ## Future Work
 

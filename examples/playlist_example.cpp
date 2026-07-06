@@ -35,10 +35,10 @@ int main()
     std::vector<std::string> categories = {"music"};
     std::vector<std::string> trackOrder = {}; // Empty for now
 
-    stevensSound::createPlaylist(
+    stevensSound::playlists["my_playlist"] = stevensSound::createMusicPlaylist(
         "my_playlist",      // Playlist name
         "music",            // Controller ID
-        categories,         // Sound categories to use
+        categories,         // Music categories to use
         trackOrder,         // Track order
         false               // Shuffle fill
     );

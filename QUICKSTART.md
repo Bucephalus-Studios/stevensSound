@@ -17,9 +17,9 @@ target_link_libraries(your_app PRIVATE stevensSound)
 ```
 
 **That's it!** CMake automatically downloads and links:
-- SDL2 (v2.0.22)
+- SDL2 (v2.28.5)
 - SDL2_mixer (v2.6.3)
-- SoundTouch (v2.3.1) - for pitch shifting
+- stevensVectorLib (for sound-variant selection)
 
 No manual dependency installation required!
 
@@ -35,7 +35,7 @@ cmake ..
 cmake --build .
 ```
 
-Tests, examples, and benchmarks are automatically built when stevensSound is the main project.
+Tests, examples, and benchmarks are automatically built when stevensSound is the main project (i.e. not pulled in via `add_subdirectory` from another project).
 
 ## Step 3: Your First Sound
 
@@ -68,39 +68,31 @@ int main()
 
 ## Common Use Cases
 
-### Pitch Shifting for Anti-Fatigue
+### Sound Variants for Anti-Fatigue
 
-Create pitch-shifted variants to prevent listener fatigue from repetitive UI sounds:
+Register several files under the same sound name — `playSound()` picks one at random each time, avoiding the "same click every time" fatigue:
 
 ```cpp
-// Load the original sound
-Mix_Chunk* original = Mix_LoadWAV("assets/sfx/select.wav");
+stevensSound::sounds["sfx"]["select"] = stevensSound::createSound(
+    "select", "sfx", "sfx",
+    "assets/sfx/select1.wav",
+    { "assets/sfx/select2.wav", "assets/sfx/select3.wav" }  // variants
+);
 
-// Create pitch variants (95% to 105% pitch)
-for (float pitch = 0.95f; pitch <= 1.05f; pitch += 0.01f)
-{
-    Mix_Chunk* variant = stevensSound::applyPitchShift(original, pitch);
-
-    std::string name = "select_" + std::to_string((int)(pitch * 100));
-    stevensSound::storePersistentSound("sfx", name, variant);
-}
-
-Mix_FreeChunk(original);
-
-// Later: play random variants during gameplay
-int randomPitch = 95 + (rand() % 11);  // 95-105
-std::string variantName = "select_" + std::to_string(randomPitch);
-stevensSound::playPersistentSound("sfx", variantName);
+// Later: plays a random variant during gameplay
+stevensSound::playSound("sfx", "select");
 ```
 
 ### Background Music
 
 ```cpp
-// Create a playlist
+// Create a playlist and register it
 std::vector<std::string> categories = {"music"};
 std::vector<std::string> tracks = {"song1", "song2", "song3"};
 
-stevensSound::createPlaylist("bgm", "music", categories, tracks, false);
+stevensSound::playlists["bgm"] = stevensSound::createMusicPlaylist(
+    "bgm", "music", categories, tracks, false
+);
 
 // Play on separate thread
 std::thread musicThread(
@@ -110,8 +102,8 @@ std::thread musicThread(
 );
 musicThread.detach();
 
-// Later: adjust volume
-stevensSound::soundControllers["music"].volume = 0.3f;
+// Later: adjust volume (applied to the running music thread)
+stevensSound::setMusicVolume(0.3f);
 ```
 
 ### Volume Control
@@ -140,47 +132,30 @@ if (stevensSound::ErrorHandler::hasError())
 }
 ```
 
-### Pre-loading Sounds
-
-For sounds that need instant playback (e.g., gunshots in a game):
-
-```cpp
-// Load into memory once
-stevensSound::storePersistentSound("sfx", "gunshot");
-
-// Now plays instantly (no disk I/O)
-stevensSound::playSound("sfx", "gunshot");  // Fast!
-
-// Free when done
-stevensSound::freePersistentSound("sfx", "gunshot");
-```
-
 ## Running the Examples
 
 ```bash
 cd build
-./bin/basic_example
-./bin/error_handling_example
-./bin/pitch_modulation_example
-./bin/raii_example
-./bin/playlist_example
+./examples/basic
+./examples/error_handling
+./examples/playlist
 ```
 
 ## Testing
 
 ```bash
 # Run unit tests
-./bin/stevensSound_tests
+./tests/tests
 
 # Run performance benchmarks
-./bin/stevensSound_benchmarks
+./benchmarks/benchmarks
 ```
 
 ## Next Steps
 
-- Read the full [README.md](README.md) for detailed API documentation
+- Read the full [README.md](README.md) for an overview
 - Check out the examples in `examples/` directory
-- Explore the API reference in [API.md](API.md)
+- Explore the full API reference in [API.md](API.md)
 
 ## Troubleshooting
 

@@ -21,6 +21,15 @@ set(SDL_OPENGL OFF CACHE BOOL "" FORCE)
 set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
 set(SDL_WAYLAND_LIBDECOR OFF CACHE BOOL "" FORCE)
 set(SDL_WAYLAND_LIBDECOR_SHARED OFF CACHE BOOL "" FORCE)
+# HIDAPI is only needed for joystick/game-controller input, which is already
+# disabled above. DBUS/IBUS/OSS/SNDIO are Unix-only audio/IPC backends that
+# SDL2 already defaults to OFF on Windows; forcing them off here is a no-op
+# there and trims unused backends from the Linux build.
+set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
+set(SDL_DBUS OFF CACHE BOOL "" FORCE)
+set(SDL_IBUS OFF CACHE BOOL "" FORCE)
+set(SDL_OSS OFF CACHE BOOL "" FORCE)
+set(SDL_SNDIO OFF CACHE BOOL "" FORCE)
 
 # Fetch SDL2 version 2.28.5 (fixes wmemcpy C++ bug and SDL_UDEV_DEVICE_TOUCHPAD udev regression in 2.24.x)
 message(STATUS "Fetching SDL2 2.28.5...")
@@ -62,6 +71,18 @@ set(SDL2MIXER_MIDI OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SDL2_mixer)
 
+# Fetch stevensVectorLib (used by classes/Sound.hpp for variant selection).
+# It transitively pulls in stevensMathLib via its own CMakeLists.txt.
+message(STATUS "Fetching stevensVectorLib...")
+FetchContent_Declare(
+    stevensVectorLib
+    GIT_REPOSITORY https://github.com/Bucephalus-Studios/stevensVectorLib.git
+    GIT_TAG main
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+)
+FetchContent_MakeAvailable(stevensVectorLib)
+
 # Create a wrapper include directory with SDL2 subdirectory
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sdl_includes/SDL2)
 execute_process(
@@ -94,7 +115,7 @@ endif()
 
 target_compile_features(stevensSound PUBLIC cxx_std_20)
 
-target_link_libraries(stevensSound PUBLIC stevensVectorLib stevensFileLib)
+target_link_libraries(stevensSound PUBLIC stevensVectorLib)
 
 # Add thread support
 find_package(Threads REQUIRED)

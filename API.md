@@ -5,13 +5,13 @@ Complete API documentation for stevensSound library.
 ## Table of Contents
 
 - [Initialization](#initialization)
+- [Sound & Music Creation](#sound--music-creation)
 - [Sound Playback](#sound-playback)
 - [Memory Management](#memory-management)
 - [Playlist Management](#playlist-management)
-- [Audio Effects](#audio-effects)
 - [Error Handling](#error-handling)
-- [RAII Wrappers](#raii-wrappers)
 - [Data Structures](#data-structures)
+- [Global Variables](#global-variables)
 
 ---
 
@@ -23,18 +23,9 @@ Complete API documentation for stevensSound library.
 bool initSound()
 ```
 
-Initializes SDL and SDL_mixer libraries.
+Initializes SDL and SDL_mixer libraries. Call once at program startup.
 
 **Returns:** `true` if successful, `false` otherwise
-
-**Example:**
-```cpp
-if (!initSound())
-{
-    std::cerr << "Failed to initialize\n";
-    return 1;
-}
-```
 
 ---
 
@@ -44,12 +35,7 @@ if (!initSound())
 void closeSound()
 ```
 
-Closes SDL and SDL_mixer, frees all resources. Call this before program exit.
-
-**Example:**
-```cpp
-closeSound();  // Clean shutdown
-```
+Halts all playback, frees all cached sounds/music, and shuts down SDL_mixer/SDL. Call this before program exit.
 
 ---
 
@@ -61,12 +47,12 @@ bool stevensSound::init(
 )
 ```
 
-Initializes the stevensSound library with sound definitions.
+Creates the `"music"`, `"sfx"`, and `"default"` playback controllers, then loads every sound/music file described by `soundsParam`.
 
 **Parameters:**
-- `soundsParam`: Nested map of `{category -> {name -> filepath}}`
+- `soundsParam`: Nested map of `{category -> {name -> filepath}}`. Any category whose name **contains the substring `"music"`** is loaded as streamed `Mix_Music` (into `stevensSound::music`); every other category is loaded as a `Mix_Chunk` (into `stevensSound::sounds`).
 
-**Returns:** `true` if successful
+**Returns:** `true` (load failures are reported via `stderr`/`ErrorHandler`, not the return value)
 
 **Example:**
 ```cpp
@@ -85,6 +71,55 @@ stevensSound::init(sounds);
 
 ---
 
+## Sound & Music Creation
+
+### `stevensSound::createSound()`
+
+```cpp
+Sound stevensSound::createSound(
+    std::string name,
+    std::string type,
+    std::string controllerId,
+    const char* filePath,
+    std::vector<const char*> variantFilePaths = {}
+)
+```
+
+Loads a `Sound` (and any variant files) into memory and returns it. Used internally by `stevensSound::init()`, but can also be called directly to add a sound after startup (store the result into `stevensSound::sounds[category][name]`).
+
+### `stevensSound::createMusic()`
+
+```cpp
+Music stevensSound::createMusic(
+    std::string name,
+    std::string type,
+    std::string controllerId,
+    const char* filePath
+)
+```
+
+Loads a `Music` handle into memory and returns it.
+
+### `stevensSound::loadSoundData()` / `stevensSound::loadMusicData()`
+
+```cpp
+std::unordered_map<std::string, Sound> stevensSound::loadSoundData(
+    std::unordered_map<std::string, const char*> soundNamesnPaths,
+    std::string soundType,
+    std::string controllerId
+);
+
+std::unordered_map<std::string, Music> stevensSound::loadMusicData(
+    std::unordered_map<std::string, const char*> musicNamesnPaths,
+    std::string musicType,
+    std::string controllerId
+);
+```
+
+Batch versions of `createSound()`/`createMusic()`, used internally by `init()`.
+
+---
+
 ## Sound Playback
 
 ### `stevensSound::playSound()`
@@ -97,23 +132,19 @@ void stevensSound::playSound(
 )
 ```
 
-Plays a sound effect.
+Plays a sound effect on a free SDL_mixer channel. If the sound has variants (see `createSound`), one is chosen at random each call.
 
 **Parameters:**
-- `category`: Sound category (e.g., "sfx", "music")
-- `soundName`: Name of the sound
-- `whenChannelsBusy`: Behavior when all channels are busy:
-  - `"return"`: Skip playing (default)
-  - `"wait"`: Wait for available channel
-  - `"steal"`: Steal a channel (not yet implemented)
+- `whenChannelsBusy`: Behavior when all 16 channels are busy:
+  - `"return"` (default): Skip playing
+  - `"wait"`: Busy-wait (10ms poll) for a free channel
+  - `"steal"`: Not yet implemented — currently a no-op, so the sound will not play
 
 **Example:**
 ```cpp
 stevensSound::playSound("sfx", "button_click");
-stevensSound::playSound("sfx", "explosion", "wait");  // Wait for channel
+stevensSound::playSound("sfx", "explosion", "wait");
 ```
-
----
 
 ### `stevensSound::playSound_detached()`
 
@@ -125,74 +156,22 @@ void stevensSound::playSound_detached(
 )
 ```
 
-Plays a sound on a detached thread (non-blocking).
+Runs `playSound()` on a detached `std::thread` so the caller doesn't block (relevant for `whenChannelsBusy = "wait"`).
 
-**Example:**
-```cpp
-stevensSound::playSound_detached("sfx", "long_sound");
-// Continues immediately without waiting
-```
-
----
-
-### `stevensSound::playPersistentSound()`
+### `stevensSound::soundsContains()`
 
 ```cpp
-void stevensSound::playPersistentSound(
+bool stevensSound::soundsContains(
     const std::string& category,
-    const std::string& soundName,
-    const std::string& whenChannelsBusy = "return"
+    const std::string& soundName
 )
 ```
 
-Plays a persistently loaded sound (faster, no disk I/O).
-
-**Example:**
-```cpp
-stevensSound::playPersistentSound("sfx", "gunshot");
-```
+Returns `true` if a loaded sound effect exists under `category`/`soundName`. (Only checks `stevensSound::sounds`, not `stevensSound::music`.)
 
 ---
 
 ## Memory Management
-
-### `stevensSound::storePersistentSound()`
-
-```cpp
-void stevensSound::storePersistentSound(
-    const std::string& category,
-    const std::string& soundName
-)
-```
-
-Loads a sound into memory for faster playback.
-
-**Example:**
-```cpp
-// Pre-load frequently used sounds
-stevensSound::storePersistentSound("sfx", "button_click");
-stevensSound::storePersistentSound("sfx", "hover_sound");
-```
-
----
-
-### `stevensSound::freePersistentSound()`
-
-```cpp
-void stevensSound::freePersistentSound(
-    const std::string& category,
-    const std::string& soundName
-)
-```
-
-Frees a persistently stored sound from memory.
-
-**Example:**
-```cpp
-stevensSound::freePersistentSound("sfx", "button_click");
-```
-
----
 
 ### `stevensSound::freeChunks()`
 
@@ -200,76 +179,72 @@ stevensSound::freePersistentSound("sfx", "button_click");
 void stevensSound::freeChunks()
 ```
 
-Frees all non-persistent chunks that aren't currently playing.
+Frees any chunks tracked in the internal chunk pool that have finished playing. Safe to call periodically; chunks still playing are left alone.
 
----
-
-### `stevensSound::freePersistentChunks()`
+### `stevensSound::freeMixChunks()`
 
 ```cpp
-void stevensSound::freePersistentChunks()
+void stevensSound::freeMixChunks()
 ```
 
-Frees all persistent chunks. Called automatically by `closeSound()`.
+Frees every `Mix_Chunk` cached in `stevensSound::sounds`. Called automatically by `closeSound()` during shutdown — don't call this while sounds might still be needed.
 
 ---
 
 ## Playlist Management
 
-### `stevensSound::createPlaylist()`
+### `stevensSound::createMusicPlaylist()` / `stevensSound::createSoundPlaylist()`
 
 ```cpp
-void stevensSound::createPlaylist(
+SoundPlaylist stevensSound::createMusicPlaylist(
+    std::string playlistName,
+    std::string controllerId,
+    std::vector<std::string> musicCategoriesUsed,
+    std::vector<std::string> trackOrder,
+    bool shuffleFill
+);
+
+SoundPlaylist stevensSound::createSoundPlaylist(
     std::string playlistName,
     std::string controllerId,
     std::vector<std::string> soundCategoriesUsed,
-    std::vector<std::string> trackOrder,
+    std::vector<std::string> soundOrder,
     bool shuffleFill
-)
+);
 ```
 
-Creates a music playlist.
+Builds a `SoundPlaylist` from the requested categories/track order and returns it — it is **not** automatically registered. Store it into `stevensSound::playlists[playlistName]` yourself so `switchMusicPlaylist()` can find it later.
 
 **Parameters:**
-- `playlistName`: Unique identifier for the playlist
-- `controllerId`: Volume controller to use (e.g., "music")
-- `soundCategoriesUsed`: Categories to pull tracks from
-- `trackOrder`: Ordered list of track names
-- `shuffleFill`: Fill remaining tracks in random order
+- `playlistName`: Identifier for the playlist (also stored on the returned object)
+- `controllerId`: Which `soundControllers` entry controls this playlist's volume (e.g. `"music"`)
+- `musicCategoriesUsed`/`soundCategoriesUsed`: Categories to pull tracks from
+- `trackOrder`/`soundOrder`: Explicit ordering; any name not found logs a warning to `stderr` and is skipped
+- `shuffleFill`: If `true`, appends all remaining tracks from the given categories in random order after `trackOrder`
 
 **Example:**
 ```cpp
 std::vector<std::string> categories = {"music"};
 std::vector<std::string> tracks = {"intro", "main_theme", "battle"};
 
-stevensSound::createPlaylist(
-    "game_music",      // Name
-    "music",           // Controller
-    categories,        // Categories
-    tracks,            // Track order
-    false              // Don't shuffle fill
+stevensSound::playlists["game_music"] = stevensSound::createMusicPlaylist(
+    "game_music", "music", categories, tracks, false
 );
 ```
-
----
 
 ### `stevensSound::playMusicPlaylist()`
 
 ```cpp
 void stevensSound::playMusicPlaylist(
-    s_soundPlaylist& playlist,
+    SoundPlaylist& playlist,
     std::string onCompletion = "end"
 )
 ```
 
-Plays a music playlist (blocking call, use on separate thread).
+Blocking call — run it on its own `std::thread`. Plays through `playlist`'s tracks in order, polling an internal command queue (fed by `switchMusicPlaylist()`, `stopMusicPlaylist()`, `setMusicVolume()`) roughly every 100ms while a track plays.
 
 **Parameters:**
-- `playlist`: Reference to playlist object
-- `onCompletion`: Behavior when playlist ends:
-  - `"end"`: Stop playing (default)
-  - `"loop"`: Restart from beginning
-  - `"shuffle"`: Shuffle and restart
+- `onCompletion`: `"end"` (default, stop), `"loop"` (restart from track 0), or `"shuffle"` (shuffle and restart)
 
 **Example:**
 ```cpp
@@ -281,22 +256,28 @@ std::thread musicThread(
 musicThread.detach();
 ```
 
----
+### `stevensSound::playPlaylist()`
+
+```cpp
+void stevensSound::playPlaylist(SoundPlaylist playlist)
+```
+
+Synchronously plays every sound in a playlist in order (via `playSound()`), honoring `preTrackDelays`/`postTrackDelays`. Typically used for sound-effect sequences rather than music.
 
 ### `stevensSound::switchMusicPlaylist()`
 
 ```cpp
-void stevensSound::switchMusicPlaylist(const std::string& switchToPlaylist)
+void stevensSound::switchMusicPlaylist(
+    const std::string& switchToPlaylist,
+    PlaylistSwitchOptions options = {}
+)
 ```
 
-Switches to a different playlist (thread-safe).
+Fire-and-forget: queues a switch command for whichever thread is running `playMusicPlaylist()`. Errors (unknown playlist name) are reported via `ErrorHandler`, not a return value.
 
-**Example:**
 ```cpp
-stevensSound::switchMusicPlaylist("battle_music");
+stevensSound::switchMusicPlaylist("battle_music", { .fadeInMs = 500 });
 ```
-
----
 
 ### `stevensSound::stopMusicPlaylist()`
 
@@ -304,90 +285,16 @@ stevensSound::switchMusicPlaylist("battle_music");
 void stevensSound::stopMusicPlaylist()
 ```
 
-Stops the currently playing playlist.
+Queues a stop command and **blocks** until the music thread acknowledges it.
 
-**Example:**
-```cpp
-stevensSound::stopMusicPlaylist();
-```
-
----
-
-## Audio Effects
-
-### `stevensSound::setupAntiFatigueSound()`
+### `stevensSound::setMusicVolume()` / `stevensSound::setSfxVolume()`
 
 ```cpp
-void stevensSound::setupAntiFatigueSound(
-    const std::string& category,
-    const std::string& soundName,
-    float randomRange = 0.1f
-)
+void stevensSound::setMusicVolume(float volume);
+void stevensSound::setSfxVolume(float volume);
 ```
 
-Sets up pitch/volume randomization to prevent audio fatigue.
-
-**Parameters:**
-- `category`: Sound category
-- `soundName`: Sound name
-- `randomRange`: Variation amount (0.0 to 1.0, default 0.1 = 10%)
-
-**Example:**
-```cpp
-// Vary button clicks by 10%
-stevensSound::setupAntiFatigueSound("sfx", "button_click", 0.1f);
-
-// Vary notifications by 15%
-stevensSound::setupAntiFatigueSound("sfx", "notification", 0.15f);
-```
-
----
-
-### `AudioEffectsManager::setEffects()`
-
-```cpp
-static void AudioEffectsManager::setEffects(
-    const std::string& category,
-    const std::string& soundName,
-    const AudioEffects& effects
-)
-```
-
-Sets custom audio effects for a sound.
-
-**Example:**
-```cpp
-stevensSound::AudioEffects effects;
-effects.volumeModulation = 0.8f;   // 80% volume
-effects.panPosition = -0.5f;        // Pan left
-effects.randomizePitch = true;
-effects.randomRange = 0.1f;
-
-stevensSound::AudioEffectsManager::setEffects("sfx", "enemy_hit", effects);
-```
-
----
-
-### `AudioEffectsManager::setPanPosition()`
-
-```cpp
-static void AudioEffectsManager::setPanPosition(
-    const std::string& category,
-    const std::string& soundName,
-    float pan
-)
-```
-
-Sets stereo pan position.
-
-**Parameters:**
-- `pan`: -1.0 (full left) to 1.0 (full right), 0.0 = center
-
-**Example:**
-```cpp
-stevensSound::AudioEffectsManager::setPanPosition("sfx", "car_left", -0.8f);
-stevensSound::AudioEffectsManager::setPanPosition("sfx", "car_right", 0.8f);
-```
+Update the `"music"`/`"sfx"` controller's volume (0.0–1.0). `setMusicVolume()` also queues a command so the running music thread applies it immediately; `setSfxVolume()` takes effect on each subsequent `playSound()` call.
 
 ---
 
@@ -396,21 +303,10 @@ stevensSound::AudioEffectsManager::setPanPosition("sfx", "car_right", 0.8f);
 ### `ErrorHandler::setErrorHandler()`
 
 ```cpp
-static void ErrorHandler::setErrorHandler(
-    std::function<void(const ErrorInfo&)> handler
-)
+static void ErrorHandler::setErrorHandler(std::function<void(const ErrorInfo&)> handler)
 ```
 
-Sets a custom error handler callback.
-
-**Example:**
-```cpp
-stevensSound::ErrorHandler::setErrorHandler([](const stevensSound::ErrorInfo& error) {
-    std::cerr << "[stevensSound] " << error.toString() << "\n";
-});
-```
-
----
+Sets a custom callback invoked every time the library reports an error.
 
 ### `ErrorHandler::setLogging()`
 
@@ -418,34 +314,16 @@ stevensSound::ErrorHandler::setErrorHandler([](const stevensSound::ErrorInfo& er
 static void ErrorHandler::setLogging(bool enable)
 ```
 
-Enables or disables automatic error logging to stdout.
+When enabled, every reported error is also printed to `stdout`.
 
-**Example:**
-```cpp
-stevensSound::ErrorHandler::setLogging(true);  // Enable logging
-```
-
----
-
-### `ErrorHandler::getLastError()`
+### `ErrorHandler::getLastError()` / `getLastErrorMessage()`
 
 ```cpp
-static ErrorInfo ErrorHandler::getLastError()
+static ErrorInfo ErrorHandler::getLastError();
+static std::string ErrorHandler::getLastErrorMessage();
 ```
 
-Gets the last error that occurred on this thread.
-
-**Returns:** `ErrorInfo` structure with error details
-
-**Example:**
-```cpp
-auto error = stevensSound::ErrorHandler::getLastError();
-std::cout << "Error level: " << (int)error.level << "\n";
-std::cout << "Message: " << error.message << "\n";
-std::cout << "Function: " << error.function << "\n";
-```
-
----
+Returns the last error set **on the calling thread** (error state is `thread_local`).
 
 ### `ErrorHandler::hasError()`
 
@@ -453,85 +331,18 @@ std::cout << "Function: " << error.function << "\n";
 static bool ErrorHandler::hasError()
 ```
 
-Checks if there is an error set on this thread.
-
-**Example:**
-```cpp
-if (stevensSound::ErrorHandler::hasError())
-{
-    std::cout << stevensSound::ErrorHandler::getLastErrorMessage() << "\n";
-}
-```
-
----
-
 ### `ErrorHandler::clearError()`
 
 ```cpp
 static void ErrorHandler::clearError()
 ```
 
-Clears the current error state.
-
----
-
-## RAII Wrappers
-
-### `MixChunkRAII`
-
-RAII wrapper for `Mix_Chunk*` that automatically frees resources.
-
-```cpp
-class MixChunkRAII
-{
-    explicit MixChunkRAII(const char* path);
-    Mix_Chunk* get() const;
-    bool isValid() const;
-    Mix_Chunk* release();
-};
-```
-
 **Example:**
 ```cpp
-{
-    stevensSound::MixChunkRAII chunk("sound.wav");
-    if (chunk.isValid())
-    {
-        Mix_PlayChannel(-1, chunk.get(), 0);
-    }
-    // Automatically freed here
-}
-```
-
----
-
-### `MixMusicRAII`
-
-RAII wrapper for `Mix_Music*`.
-
-```cpp
-class MixMusicRAII
-{
-    explicit MixMusicRAII(const char* path);
-    Mix_Music* get() const;
-    bool isValid() const;
-    Mix_Music* release();
-};
-```
-
----
-
-### Factory Functions
-
-```cpp
-MixChunkPtr makeMixChunk(const char* path);
-MixMusicPtr makeMixMusic(const char* path);
-```
-
-**Example:**
-```cpp
-auto chunk = stevensSound::makeMixChunk("sound.wav");
-auto music = stevensSound::makeMixMusic("theme.mp3");
+stevensSound::ErrorHandler::setLogging(true);
+stevensSound::ErrorHandler::setErrorHandler([](const stevensSound::ErrorInfo& error) {
+    std::cerr << "[stevensSound] " << error.toString() << "\n";
+});
 ```
 
 ---
@@ -544,39 +355,53 @@ auto music = stevensSound::makeMixMusic("theme.mp3");
 struct ErrorInfo
 {
     ErrorLevel level;        // INFO, WARNING, ERROR, CRITICAL
-    std::string message;     // Error message
-    std::string function;    // Function where error occurred
-    std::string timestamp;   // When the error occurred
+    std::string message;
+    std::string function;
+    std::string timestamp;
 
     std::string toString() const;
 };
 ```
 
----
-
-### `AudioEffects`
+### `Sound`
 
 ```cpp
-struct AudioEffects
+class Sound
 {
-    float pitchVariation;     // -1.0 to 1.0 (reserved for future use)
-    float volumeModulation;   // 0.0 to 1.0
-    float panPosition;        // -1.0 (left) to 1.0 (right)
-    bool randomizePitch;      // Enable pitch randomization
-    float randomRange;        // Range of variation (0.0 to 1.0)
+public:
+    std::string name, type, controllerId;
+    Mix_ChunkData mainChunkData;
+    std::vector<Mix_ChunkData> variantChunkData;
+
+    bool hasVariants() const;
+    bool isValid() const;
+    Mix_Chunk* getChunkToPlay();  // random variant if any exist
+    void freeAllChunks();
 };
 ```
 
----
-
-### `s_soundController`
+### `Music`
 
 ```cpp
-class s_soundController
+class Music
 {
 public:
-    std::string id;      // Controller identifier
-    float volume;        // Volume (0.0 to 1.0)
+    std::string name, type, controllerId;
+    Mix_MusicData musicData;
+
+    bool isValid() const;
+    void freeMusic();
+};
+```
+
+### `PlaybackController`
+
+```cpp
+class PlaybackController
+{
+public:
+    std::string id;
+    float volume;  // 0.0 to 1.0
 };
 ```
 
@@ -586,50 +411,86 @@ stevensSound::soundControllers["sfx"].volume = 0.8f;
 stevensSound::soundControllers["music"].volume = 0.5f;
 ```
 
+### `SoundPlaylist`
+
+```cpp
+class SoundPlaylist
+{
+public:
+    std::string name;
+    std::vector<std::tuple<std::string,std::string>> sounds;  // (category, name) in order
+    int index;
+    std::string controllerId;
+    std::string status;  // "stopped", "paused", or "playing"
+    std::unordered_map<int,int> preTrackDelays;   // ms delay before track at this index
+    std::unordered_map<int,int> postTrackDelays;  // ms delay after track at this index
+    double trackPosition = 0.0;  // seconds into the current track; saved/restored across switches
+
+    void shuffle();
+    std::string getName() const;
+};
+```
+
+### `PlaylistSwitchOptions`
+
+```cpp
+struct PlaylistSwitchOptions
+{
+    int fadeInMs = 0;  // if > 0, fades in the incoming playlist's first track
+};
+```
+
+### `Mix_ChunkData` / `Mix_MusicData`
+
+Global (non-namespaced) wrappers pairing a file path with its loaded SDL handle:
+
+```cpp
+class Mix_ChunkData
+{
+public:
+    std::string filePath;
+    Mix_Chunk* chunk;
+    bool load();
+    void free();
+    bool isLoaded() const;
+};
+
+class Mix_MusicData
+{
+public:
+    std::string filePath;
+    Mix_Music* music;
+    bool load();
+    void free();
+    bool isLoaded() const;
+};
+```
+
 ---
 
 ## Global Variables
 
-### Sound Controllers
-
 ```cpp
-stevensSound::soundControllers["default"]  // Default controller
-stevensSound::soundControllers["sfx"]      // Sound effects
-stevensSound::soundControllers["music"]    // Music
-```
-
-### Playlists
-
-```cpp
-stevensSound::playlists["playlist_name"]  // Access playlists
-```
-
-### Sounds
-
-```cpp
-stevensSound::sounds[category][name]  // Access sound data
+stevensSound::soundControllers  // unordered_map<string, PlaybackController> — "default", "sfx", "music"
+stevensSound::playlists         // unordered_map<string, SoundPlaylist> — starts with a "currently playing" entry
+stevensSound::sounds            // unordered_map<category, unordered_map<name, Sound>>
+stevensSound::music             // unordered_map<category, unordered_map<name, Music>>
 ```
 
 ---
 
 ## Thread Safety Notes
 
-- **Thread-safe:** Error handling (uses thread_local)
-- **Thread-safe:** Sound playback (uses mutexes)
-- **Thread-safe:** Playlist switching
-- **Not thread-safe:** Direct modification of `soundControllers` map (use carefully)
+- **Thread-safe:** Error handling (`thread_local` storage)
+- **Thread-safe:** Chunk pool bookkeeping (mutex-guarded)
+- **Coordinated via command queue, not free-threaded:** `switchMusicPlaylist()`/`stopMusicPlaylist()`/`setMusicVolume()` are safe to call from any thread, but only make sense while exactly one thread is running `playMusicPlaylist()`
+- **Not thread-safe:** Direct modification of `soundControllers`/`sounds`/`music`/`playlists` maps (only mutate them from one thread at a time, typically before spinning up the music thread)
 
----
+## Supported Audio Formats
 
-## Best Practices
-
-1. **Always check errors** in critical paths
-2. **Use persistent loading** for frequently played sounds
-3. **Use anti-fatigue** for repetitive UI sounds
-4. **Play playlists on separate threads**
-5. **Clean up with `closeSound()`** before exit
-6. **Use RAII wrappers** for custom sound management
-
----
+Thanks to SDL_mixer, and as configured in this library's `CMakeLists.txt`:
+- WAV, AIFF, VOC (native)
+- MP3, OGG (enabled)
+- FLAC, MOD/XM/IT (disabled by default — flip the corresponding `SDL2MIXER_*` option in `CMakeLists.txt` to enable)
 
 For more examples, see the `examples/` directory.
