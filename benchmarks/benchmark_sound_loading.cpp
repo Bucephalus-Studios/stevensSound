@@ -39,20 +39,6 @@ static void InitLibrary(benchmark::State& state)
 }
 BENCHMARK(InitLibrary);
 
-// Benchmark error handling overhead
-static void ErrorHandling(benchmark::State& state)
-{
-    using namespace stevensSound;
-
-    for (auto _ : state)
-    {
-        ErrorHandler::setError(ErrorLevel::ERROR, "Benchmark error", "BenchmarkFunction");
-        benchmark::DoNotOptimize(ErrorHandler::getLastError());
-        ErrorHandler::clearError();
-    }
-}
-BENCHMARK(ErrorHandling);
-
 // Benchmark soundsContains check
 static void SoundsContains(benchmark::State& state)
 {

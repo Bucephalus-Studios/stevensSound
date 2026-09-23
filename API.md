@@ -52,7 +52,7 @@ Creates the `"music"`, `"sfx"`, and `"default"` playback controllers, then loads
 **Parameters:**
 - `soundsParam`: Nested map of `{category -> {name -> filepath}}`. Any category whose name **contains the substring `"music"`** is loaded as streamed `Mix_Music` (into `stevensSound::music`); every other category is loaded as a `Mix_Chunk` (into `stevensSound::sounds`).
 
-**Returns:** `true` (load failures are reported via `stderr`/`ErrorHandler`, not the return value)
+**Returns:** `true` (load failures are reported via `stderr`/spdlog, not the return value)
 
 **Example:**
 ```cpp
@@ -273,7 +273,7 @@ void stevensSound::switchMusicPlaylist(
 )
 ```
 
-Fire-and-forget: queues a switch command for whichever thread is running `playMusicPlaylist()`. Errors (unknown playlist name) are reported via `ErrorHandler`, not a return value.
+Fire-and-forget: queues a switch command for whichever thread is running `playMusicPlaylist()`. Errors (unknown playlist name) are reported via spdlog, not a return value.
 
 ```cpp
 stevensSound::switchMusicPlaylist("battle_music", { .fadeInMs = 500 });
@@ -300,68 +300,24 @@ Update the `"music"`/`"sfx"` controller's volume (0.0–1.0). `setMusicVolume()`
 
 ## Error Handling
 
-### `ErrorHandler::setErrorHandler()`
+stevensSound has no error-handling API of its own — every failure it detects (a missing
+sound/music entry, an unloaded chunk, an unknown playlist name, an SDL/SDL_mixer init
+failure) is reported directly via [spdlog](https://github.com/gabime/spdlog), at
+`spdlog::critical`/`error`/`warn`/`info` depending on severity. Each message is prefixed
+`"stevensSound: <function>: ..."` so it's identifiable in a host application's shared log
+output. Configure spdlog's sinks and level the way you would for any other part of your
+application; there's nothing additional to set up on stevensSound's side.
 
+**Example** (a call that fails logs itself; there's nothing to check afterward):
 ```cpp
-static void ErrorHandler::setErrorHandler(std::function<void(const ErrorInfo&)> handler)
-```
-
-Sets a custom callback invoked every time the library reports an error.
-
-### `ErrorHandler::setLogging()`
-
-```cpp
-static void ErrorHandler::setLogging(bool enable)
-```
-
-When enabled, every reported error is also printed to `stdout`.
-
-### `ErrorHandler::getLastError()` / `getLastErrorMessage()`
-
-```cpp
-static ErrorInfo ErrorHandler::getLastError();
-static std::string ErrorHandler::getLastErrorMessage();
-```
-
-Returns the last error set **on the calling thread** (error state is `thread_local`).
-
-### `ErrorHandler::hasError()`
-
-```cpp
-static bool ErrorHandler::hasError()
-```
-
-### `ErrorHandler::clearError()`
-
-```cpp
-static void ErrorHandler::clearError()
-```
-
-**Example:**
-```cpp
-stevensSound::ErrorHandler::setLogging(true);
-stevensSound::ErrorHandler::setErrorHandler([](const stevensSound::ErrorInfo& error) {
-    std::cerr << "[stevensSound] " << error.toString() << "\n";
-});
+stevensSound::playSound("sfx", "nonexistent");
+// -> spdlog::error: "stevensSound: playSound: Requested to play sound with category
+//    \"sfx\" and name \"nonexistent\", but it does not exist"
 ```
 
 ---
 
 ## Data Structures
-
-### `ErrorInfo`
-
-```cpp
-struct ErrorInfo
-{
-    ErrorLevel level;        // INFO, WARNING, ERROR, CRITICAL
-    std::string message;
-    std::string function;
-    std::string timestamp;
-
-    std::string toString() const;
-};
-```
 
 ### `Sound`
 

@@ -29,13 +29,14 @@
 	#include<SDL2/SDL_mixer.h>
 #endif
 
+#include <spdlog/spdlog.h>
+
 //Include global (non-namespaced) SDL wrapper classes
 #include "classes/Mix_ChunkData.h"
 #include "classes/Mix_MusicData.h"
 
 //Include stevensSound classes (each wraps itself in namespace stevensSound)
 #include "classes/AudioCommand.hpp"
-#include "classes/ErrorHandler.hpp"
 #include "classes/Music.hpp"
 #include "classes/PlaybackController.hpp"
 #include "classes/PlaylistSwitchOptions.hpp"

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include "Mix_ChunkData.h"
-#include "ErrorHandler.hpp"
+#include <spdlog/spdlog.h>
 #include <stevensVectorLib.hpp>
 
 namespace stevensSound
@@ -55,9 +55,7 @@ class Sound
         {
             if (mainChunkData.chunk == nullptr)
             {
-                ErrorHandler::setError(ErrorLevel::ERROR,
-                    "Sound chunk is null for: " + name + " (" + mainChunkData.filePath + ")",
-                    "Sound::isValid");
+                spdlog::error("stevensSound: Sound::isValid: Sound chunk is null for: {} ({})", name, mainChunkData.filePath);
                 return false;
             }
             return true;

@@ -16,8 +16,6 @@ protected:
         {
             GTEST_SKIP() << "Failed to initialize SDL/SDL_mixer";
         }
-
-        stevensSound::ErrorHandler::clearError();
     }
 
     void TearDown() override
@@ -58,20 +56,15 @@ TEST_F(SoundLoadingTest, SoundsContains)
     EXPECT_FALSE(stevensSound::soundsContains("music", "nonexistent"));
 }
 
-TEST_F(SoundLoadingTest, ErrorOnInvalidSound)
+TEST_F(SoundLoadingTest, PlayingInvalidSoundIsASafeNoOp)
 {
     std::unordered_map<std::string, std::unordered_map<std::string, const char*>> sounds = {
         {"sfx", {}}
     };
 
     stevensSound::init(sounds);
-    stevensSound::ErrorHandler::clearError();
 
-    // Try to play non-existent sound
+    // Playing a non-existent sound should be a safe no-op (logged via spdlog, not
+    // something this test can observe) rather than a crash.
     stevensSound::playSound("sfx", "nonexistent");
-
-    // Should have set an error
-    EXPECT_TRUE(stevensSound::ErrorHandler::hasError());
-    auto error = stevensSound::ErrorHandler::getLastError();
-    EXPECT_EQ(error.level, stevensSound::ErrorLevel::ERROR);
 }

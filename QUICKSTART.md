@@ -116,20 +116,14 @@ stevensSound::soundControllers["music"].volume = 0.5f;   // 50% music volume
 
 ### Error Handling
 
-```cpp
-// Enable error logging
-stevensSound::ErrorHandler::setLogging(true);
+stevensSound logs failures (a missing sound, a bad playlist name, an SDL/SDL_mixer init
+error, etc.) via spdlog rather than through a separate error-checking API — configure
+spdlog's sinks/level in your own application to see them:
 
+```cpp
 // Try to play a sound
 stevensSound::playSound("sfx", "nonexistent");
-
-// Check for errors
-if (stevensSound::ErrorHandler::hasError())
-{
-    std::cout << "Error: "
-              << stevensSound::ErrorHandler::getLastErrorMessage()
-              << "\n";
-}
+// -> logged via spdlog::error, e.g. "stevensSound: playSound: ... does not exist"
 ```
 
 ## Running the Examples
@@ -137,7 +131,6 @@ if (stevensSound::ErrorHandler::hasError())
 ```bash
 cd build
 ./examples/basic
-./examples/error_handling
 ./examples/playlist
 ```
 
@@ -181,11 +174,8 @@ cmake ..
 
 1. Check file paths are correct (relative to executable)
 2. Verify audio format is supported (WAV is safest)
-3. Enable error logging to see what's happening:
-
-```cpp
-stevensSound::ErrorHandler::setLogging(true);
-```
+3. Check your application's spdlog output — stevensSound logs the specific failure
+   (missing sound, unloaded chunk, bad playlist name, etc.) at `error`/`critical` level
 
 ## Platform Notes
 

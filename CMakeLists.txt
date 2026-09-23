@@ -83,6 +83,23 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stevensVectorLib)
 
+# Fetch spdlog (used for all of stevensSound's own diagnostic logging), unless a parent
+# project (e.g. cultgame, which links stevensSound via FetchContent) already provides the
+# spdlog::spdlog target -- reuse that one instead of fetching/building a second copy.
+if(NOT TARGET spdlog::spdlog)
+    message(STATUS "Fetching spdlog...")
+    set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_BUILD_BENCH   OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        spdlog
+        GIT_REPOSITORY https://github.com/gabime/spdlog.git
+        GIT_TAG        v1.15.0
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(spdlog)
+endif()
+
 # Create a wrapper include directory with SDL2 subdirectory
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sdl_includes/SDL2)
 execute_process(
@@ -116,6 +133,9 @@ endif()
 target_compile_features(stevensSound PUBLIC cxx_std_20)
 
 target_link_libraries(stevensSound PUBLIC stevensVectorLib)
+
+# spdlog headers are included from stevensSound.hpp/Sound.hpp/Music.hpp, so consumers need it too
+target_link_libraries(stevensSound PUBLIC spdlog::spdlog)
 
 # Add thread support
 find_package(Threads REQUIRED)

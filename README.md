@@ -75,22 +75,12 @@ int main()
 
 ### 1. Error Handling
 
-```cpp
-// Enable logging
-stevensSound::ErrorHandler::setLogging(true);
-
-// Set custom error handler
-stevensSound::ErrorHandler::setErrorHandler([](const stevensSound::ErrorInfo& error) {
-    std::cout << "Error: " << error.message << "\n";
-});
-
-// Check for errors
-if (stevensSound::ErrorHandler::hasError())
-{
-    auto error = stevensSound::ErrorHandler::getLastError();
-    std::cout << error.toString() << "\n";
-}
-```
+stevensSound logs failures (a missing sound, a bad playlist name, SDL/SDL_mixer init
+errors, etc.) directly via [spdlog](https://github.com/gabime/spdlog) — `spdlog::critical`,
+`spdlog::error`, or `spdlog::warn` depending on severity, each message prefixed
+`"stevensSound: <function>: ..."` so it's identifiable when mixed into your application's
+own log output. Configure spdlog's sinks/level the way you normally would in your app;
+stevensSound doesn't set up its own logger or offer a separate error-handling API.
 
 ### 2. Sound Variants (Anti-Fatigue)
 
@@ -198,7 +188,6 @@ stevensSound/
 ├── stevensSound.cpp            # Compiled implementation
 ├── classes/                    # Library components
 │   ├── AudioCommand.hpp       # Internal command-queue message type
-│   ├── ErrorHandler.hpp       # Thread-safe error handling system
 │   ├── Mix_ChunkData.h        # Wraps a Mix_Chunk + its file path
 │   ├── Mix_MusicData.h        # Wraps a Mix_Music + its file path
 │   ├── Music.hpp               # A named, loaded piece of music

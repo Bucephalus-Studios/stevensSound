@@ -13,11 +13,10 @@ int main()
     std::cout << "stevensSound Basic Example\n";
     std::cout << "==========================\n\n";
 
-    // Initialize SDL and SDL_mixer
+    // Initialize SDL and SDL_mixer (failure details are logged via spdlog)
     if (!initSound())
     {
         std::cerr << "Failed to initialize SDL/SDL_mixer\n";
-        std::cerr << "Error: " << stevensSound::ErrorHandler::getLastErrorMessage() << "\n";
         return 1;
     }
 
@@ -34,26 +33,16 @@ int main()
     if (!stevensSound::init(sounds))
     {
         std::cerr << "Failed to initialize stevensSound library\n";
-        std::cerr << "Error: " << stevensSound::ErrorHandler::getLastErrorMessage() << "\n";
         closeSound();
         return 1;
     }
 
     std::cout << "Library initialized successfully!\n\n";
 
-    // Demonstrate error handling
-    std::cout << "Testing error handling...\n";
-    stevensSound::ErrorHandler::clearError();
-
-    // Try to play a sound that doesn't exist
+    // Playing a sound that doesn't exist is a safe no-op -- stevensSound logs the
+    // failure via spdlog rather than surfacing it through a return value here.
+    std::cout << "Testing playback of a non-existent sound (see spdlog output)...\n";
     stevensSound::playSound("sfx", "nonexistent_sound");
-
-    if (stevensSound::ErrorHandler::hasError())
-    {
-        auto error = stevensSound::ErrorHandler::getLastError();
-        std::cout << "Caught expected error:\n";
-        std::cout << "  " << error.toString() << "\n\n";
-    }
 
     // Demonstrate volume control
     std::cout << "Volume control example:\n";

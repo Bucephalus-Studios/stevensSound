@@ -16,10 +16,6 @@ target_link_libraries(basic PRIVATE stevensSound)
 add_executable(playlist playlist_example.cpp)
 target_link_libraries(playlist PRIVATE stevensSound)
 
-# Error handling example
-add_executable(error_handling error_handling_example.cpp)
-target_link_libraries(error_handling PRIVATE stevensSound)
-
 # Copy example assets to build directory
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/assets)
     file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets

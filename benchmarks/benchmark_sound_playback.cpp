@@ -70,15 +70,3 @@ static void PlaylistLookup(benchmark::State& state)
     closeSound();
 }
 BENCHMARK(PlaylistLookup);
-
-// Benchmark error checking
-static void ErrorChecking(benchmark::State& state)
-{
-    using namespace stevensSound;
-
-    for (auto _ : state)
-    {
-        benchmark::DoNotOptimize(ErrorHandler::hasError());
-    }
-}
-BENCHMARK(ErrorChecking);

@@ -2,7 +2,7 @@
 
 #include <string>
 #include "Mix_MusicData.h"
-#include "ErrorHandler.hpp"
+#include <spdlog/spdlog.h>
 
 namespace stevensSound
 {
@@ -48,9 +48,7 @@ class Music
         {
             if (musicData.music == nullptr)
             {
-                ErrorHandler::setError(ErrorLevel::ERROR,
-                    "Music handle is null for: " + name + " (" + musicData.filePath + ")",
-                    "Music::isValid");
+                spdlog::error("stevensSound: Music::isValid: Music handle is null for: {} ({})", name, musicData.filePath);
                 return false;
             }
             return true;

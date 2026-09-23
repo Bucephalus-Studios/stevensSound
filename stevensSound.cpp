@@ -225,15 +225,13 @@ namespace stevensSound
 		int channels = Mix_AllocateChannels(16);
 		if (channels != 16)
 		{
-			ErrorHandler::setError(ErrorLevel::WARNING,
-				"Failed to allocate 16 channels, got " + std::to_string(channels),
-				"init");
+			spdlog::warn("stevensSound: init: Failed to allocate 16 channels, got {}", channels);
 		}
 
 		//Initialize our playlists container to be empty other than having an empty "currently playing" playlist
 		playlists.emplace( "currently playing", SoundPlaylist() );
 
-		ErrorHandler::setError(ErrorLevel::INFO, "stevensSound initialized successfully", "init");
+		spdlog::info("stevensSound: init: stevensSound initialized successfully");
 		return true;
 	}
 
@@ -307,9 +305,7 @@ namespace stevensSound
 		//Check: Is the category and soundName combo valid?
 		if( !soundsContains( category, soundName ) )
 		{
-			ErrorHandler::setError(ErrorLevel::ERROR,
-				"Requested to play sound with category \"" + category + "\" and name \"" + soundName + "\", but it does not exist",
-				"playSound");
+			spdlog::error("stevensSound: playSound: Requested to play sound with category \"{}\" and name \"{}\", but it does not exist", category, soundName);
 			return;
 		}
 
@@ -319,9 +315,7 @@ namespace stevensSound
 		//Check if the chunk is actually loaded
 		if( sound == nullptr )
 		{
-			ErrorHandler::setError(ErrorLevel::ERROR,
-				"Sound \"" + category + "/" + soundName + "\" exists but is not loaded in memory",
-				"playSound");
+			spdlog::error("stevensSound: playSound: Sound \"{}/{}\" exists but is not loaded in memory", category, soundName);
 			return;
 		}
 
@@ -526,9 +520,7 @@ namespace stevensSound
 	{
 		if( !playlists.contains( switchToPlaylist ) )
 		{
-			ErrorHandler::setError(ErrorLevel::ERROR,
-				"Playlist \"" + switchToPlaylist + "\" does not exist",
-				"switchMusicPlaylist");
+			spdlog::error("stevensSound: switchMusicPlaylist: Playlist \"{}\" does not exist", switchToPlaylist);
 			return;
 		}
 		std::lock_guard<std::mutex> lock( commandMutex );
@@ -764,26 +756,20 @@ bool initSound()
 	//Initialize SDL
 	if( SDL_Init( SDL_INIT_AUDIO ) < 0 )
 	{
-		stevensSound::ErrorHandler::setError(stevensSound::ErrorLevel::CRITICAL,
-			"SDL could not initialize! SDL Error: " + std::string(SDL_GetError()),
-			"initSound");
+		spdlog::critical("stevensSound: initSound: SDL could not initialize! SDL Error: {}", SDL_GetError());
 		return false;
 	}
 	//Initialize SDL_mixer
 	if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 ) < 0 )
 	{
-		stevensSound::ErrorHandler::setError(stevensSound::ErrorLevel::CRITICAL,
-			"SDL_mixer could not initialize! SDL_mixer Error: " + std::string(Mix_GetError()),
-			"initSound");
+		spdlog::critical("stevensSound: initSound: SDL_mixer could not initialize! SDL_mixer Error: {}", Mix_GetError());
 		SDL_Quit();
 		return false;
 	}
 
 	Mix_ChannelFinished(stevensSound_channelFinishedCallback);
 
-	stevensSound::ErrorHandler::setError(stevensSound::ErrorLevel::INFO,
-		"SDL and SDL_mixer initialized successfully",
-		"initSound");
+	spdlog::info("stevensSound: initSound: SDL and SDL_mixer initialized successfully");
 	return true;
 }
 

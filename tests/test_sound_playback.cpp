@@ -22,7 +22,6 @@ protected:
         };
 
         stevensSound::init(sounds);
-        stevensSound::ErrorHandler::clearError();
     }
 
     void TearDown() override
@@ -33,40 +32,30 @@ protected:
 
 TEST_F(SoundPlaybackTest, PlayInvalidSound)
 {
-    // Try to play a sound that doesn't exist
+    // Playing a sound that doesn't exist should be a safe no-op (logged via spdlog,
+    // not something this test can observe) rather than a crash.
+    EXPECT_FALSE(stevensSound::soundsContains("sfx", "nonexistent"));
     stevensSound::playSound("sfx", "nonexistent");
-
-    EXPECT_TRUE(stevensSound::ErrorHandler::hasError());
-    auto error = stevensSound::ErrorHandler::getLastError();
-    EXPECT_EQ(error.level, stevensSound::ErrorLevel::ERROR);
 }
 
 TEST_F(SoundPlaybackTest, CreateSoundPlaylist)
 {
-    stevensSound::ErrorHandler::clearError();
-
     std::vector<std::string> categories = {"sfx"};
     std::vector<std::string> trackOrder = {};
 
     stevensSound::SoundPlaylist playlist =
         stevensSound::createSoundPlaylist("test_playlist", "sfx", categories, trackOrder, false);
 
-    // Should complete without error
-    EXPECT_FALSE(stevensSound::ErrorHandler::hasError());
     EXPECT_EQ(playlist.name, "test_playlist");
     EXPECT_EQ(playlist.controllerId, "sfx");
 }
 
 TEST_F(SoundPlaybackTest, SwitchToNonExistentPlaylist)
 {
-    stevensSound::ErrorHandler::clearError();
-
-    // Try to switch to a playlist that doesn't exist
+    // Switching to a playlist that doesn't exist should be a safe no-op (logged via
+    // spdlog, not something this test can observe) rather than a crash or a queued command.
+    ASSERT_FALSE(stevensSound::playlists.contains("nonexistent_playlist"));
     stevensSound::switchMusicPlaylist("nonexistent_playlist");
-
-    EXPECT_TRUE(stevensSound::ErrorHandler::hasError());
-    auto error = stevensSound::ErrorHandler::getLastError();
-    EXPECT_EQ(error.level, stevensSound::ErrorLevel::ERROR);
 }
 
 TEST_F(SoundPlaybackTest, VolumeController)

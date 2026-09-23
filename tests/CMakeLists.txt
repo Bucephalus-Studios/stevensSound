@@ -31,7 +31,6 @@ enable_testing()
 # Create test executable
 add_executable(tests
     test_main.cpp
-    test_error_handler.cpp
     test_sound_loading.cpp
     test_sound_playback.cpp
 )
