@@ -43,9 +43,11 @@
 #include "classes/Sound.hpp"
 #include "classes/SoundPlaylist.hpp"
 
-/***** Global variables and helpers for managing Mix_Chunk memory (defined in stevensSound.cpp) *****/
-static std::mutex stevensSound_chunkMutex;
-static std::unordered_set< Mix_Chunk* > stevensSound_chunkPool;
+/***** Global variables and helpers for managing Mix_Chunk memory *****/
+// inline, not static: one shared mutex and pool for the whole program instead of a separate
+// copy in every .cpp that includes this header (which would let two files lock different mutexes)
+inline std::mutex stevensSound_chunkMutex;
+inline std::unordered_set< Mix_Chunk* > stevensSound_chunkPool;
 
 bool stevensSound_isChunkPlaying( Mix_Chunk * chunk );
 void stevensSound_channelFinishedCallback( const int channel );
